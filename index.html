@@ -597,19 +597,19 @@
       </div>
     </div>
     <div class="tab-list" id="tabList"></div>
-    <button class="tab-new" onclick="alert('In questo prototipo la creazione di un nuovo matrimonio è disattivata — qui vediamo come funziona con dati reali.')">+ Nuovo matrimonio</button>
+    <button id="newWeddingBtn" class="tab-new" onclick="alert('In questo prototipo la creazione di un nuovo matrimonio è disattivata — qui vediamo come funziona con dati reali.')">+ Nuovo matrimonio</button>
     <div class="sidebar-foot">
       Prototipo — vista planner mostra tutti i matrimoni in gestione.<br>La vista fornitore è limitata a un singolo matrimonio e alla propria scheda.
       <div id="saveStatus" style="margin-top:10px; font-size:10.5px; color:var(--sage);">● Dati salvati</div>
       <div id="authStatus" style="margin-top:6px; font-size:10.5px; color:var(--ink-soft);"></div>
-      <button onclick="resetAllData()" style="margin-top:8px; font-size:10.5px; color:var(--wine); background:none; border:1px dashed var(--wine); border-radius:6px; padding:5px 8px; cursor:pointer;">Reimposta ai dati di partenza</button>
+      <button id="resetDataBtn" onclick="resetAllData()" style="margin-top:8px; font-size:10.5px; color:var(--wine); background:none; border:1px dashed var(--wine); border-radius:6px; padding:5px 8px; cursor:pointer;">Reimposta ai dati di partenza</button>
     </div>
   </aside>
 
   <main class="main">
     <div class="topbar">
       <div class="wedding-head" id="weddingHead"></div>
-      <div class="role-toggle">
+      <div class="role-toggle" id="roleToggleWrap">
         <div>
           <div class="role-label">Vista</div>
           <select id="roleSelect" onchange="onRoleChange()">
@@ -617,6 +617,12 @@
             <option value="sposi">Sposi</option>
             <option value="fornitore">Fornitore</option>
           </select>
+        </div>
+      </div>
+      <div class="role-toggle" id="identityBadge" style="display:none;">
+        <div>
+          <div class="role-label">Accesso come</div>
+          <div id="identityBadgeText" style="font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:var(--ink);"></div>
         </div>
       </div>
     </div>
@@ -863,9 +869,11 @@ const weddings = [
   }
 ];
 
-// Normalizzazione: canale RSVP a livello di matrimonio + campi rsvp/transfer per ogni ospite
+// Normalizzazione: canale RSVP, email di accesso fornitori/sposi, campi rsvp/transfer per ogni ospite
 weddings.forEach(w=>{
   if(!w.rsvpChannel) w.rsvpChannel = {tipo:'', valore:''};
+  if(w.sposiEmail===undefined) w.sposiEmail = '';
+  (w.fornitori||[]).forEach(f=>{ if(f.email===undefined) f.email=''; });
   (w.guests||[]).forEach(g=>{
     if(g.rsvp===undefined) g.rsvp = 'in attesa';
     if(!g.transferAH) g.transferAH = {data:'', ora:''};
@@ -895,8 +903,10 @@ function currentWedding(){ return weddings[state.weddingIndex]; }
 
 function renderSidebar(){
   const list = document.getElementById('tabList');
-  list.innerHTML = weddings.map((w,i)=>`
-    <div class="tab ${i===state.weddingIndex?'active':''}" onclick="selectWedding(${i})">
+  const canSwitch = !(FIREBASE_READY && identity && identity.role!=='planner');
+  const visible = canSwitch ? weddings.map((w,i)=>({w,i})) : [{w:weddings[state.weddingIndex], i:state.weddingIndex}];
+  list.innerHTML = visible.map(({w,i})=>`
+    <div class="tab ${i===state.weddingIndex?'active':''}" ${canSwitch?`onclick="selectWedding(${i})"`:''} style="${canSwitch?'':'cursor:default;'}">
       <span class="num">0${i+1}</span>
       <span class="names">${w.names}</span>
       <span class="date">${w.date} · ${w.location}</span>
@@ -937,7 +947,7 @@ function renderHeader(){
 function renderSubnav(){
   const nav = document.getElementById('subnav');
   if(state.role==='planner'){
-    const tabs = [['budget','Budget'],['fornitori','Fornitori'],['schede','Timeline & Schede Fornitori'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard']];
+    const tabs = [['budget','Budget'],['fornitori','Fornitori'],['schede','Timeline & Schede Fornitori'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
     nav.innerHTML = tabs.map(([id,label])=>`
       <button class="${state.subtab===id?'active':''}" onclick="setSubtab('${id}')">${label}</button>
     `).join('');
@@ -957,11 +967,6 @@ function renderContent(){
   if(state.role==='fornitore'){
     c.innerHTML = renderFornitoreView(w);
     persistWedding(w);
-    return;
-  }
-
-  if(state.role==='planner' && FIREBASE_READY && !currentUser){
-    c.innerHTML = renderLoginScreen();
     return;
   }
 
@@ -1021,6 +1026,11 @@ function renderContent(){
         </div>
       `).join('')}
     `;
+  }
+
+  if(state.subtab==='accessi'){
+    renderAccessLog();
+    return;
   }
 
   if(state.subtab==='schede'){
@@ -1100,7 +1110,7 @@ function renderFornitoreView(w){
   const supplierNames = [...new Set(w.fornitori.map(f=>f.ref))];
   if(!state.supplierRef && supplierNames.length) state.supplierRef = supplierNames[0];
 
-  const selectHtml = `
+  const selectHtml = FIREBASE_READY ? '' : `
     <div class="supplier-select-wrap">
       <label>Accedi come</label>
       <select onchange="setSupplier(this.value)">
@@ -1163,6 +1173,12 @@ function renderSchedeFornitori(w){
     <div class="fornitore-card">
       <h2>${f.ref}</h2>
       <div class="cat">${f.cat} · ${f.nome}</div>
+      <div class="criterio-note" style="margin-bottom:16px;">
+        <b>Email di accesso:</b> questa è l'email con cui il fornitore effettuerà il login sul sito (deve corrispondere a un utente creato in Firebase Authentication).
+        <div style="margin-top:8px;">
+          <input type="email" value="${f.email||''}" placeholder="es. lamimosa@fiori.it" onchange="updateFornitoreField('${f.ref}','email',this.value)" style="width:100%; max-width:320px; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--white-ish);">
+        </div>
+      </div>
       <div class="fornitore-meta">
         <div><div class="k">Contattato</div><div class="v">
           <label style="font-size:12px; display:flex; align-items:center; gap:6px;">
@@ -1302,6 +1318,11 @@ function renderPrincipale(w, guests){
       <input type="text" id="rsvpValore" placeholder="numero o indirizzo email" value="${ch.valore||''}" style="padding:6px 8px; border-radius:6px; border:1px solid var(--rule); min-width:220px;">
       <button class="btn-mini" onclick="saveRsvpChannel()">Salva canale RSVP</button>
     </div>
+    <div class="criterio-note" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+      <div><b>Email di accesso sposi:</b> l'account con cui la coppia farà il login sul sito (deve corrispondere a un utente creato in Firebase Authentication).</div>
+      <input type="email" id="sposiEmailInput" placeholder="es. alessandroevaleria@gmail.com" value="${w.sposiEmail||''}" style="padding:6px 8px; border-radius:6px; border:1px solid var(--rule); min-width:260px;">
+      <button class="btn-mini" onclick="saveSposiEmail()">Salva email sposi</button>
+    </div>
   `;
 
   const formHtml = `
@@ -1397,6 +1418,11 @@ function updateGuestTransfer(idx, field, part, value){
 function saveRsvpChannel(){
   const w = currentWedding();
   w.rsvpChannel = { tipo: document.getElementById('rsvpTipo').value, valore: document.getElementById('rsvpValore').value.trim() };
+  renderContent();
+}
+function saveSposiEmail(){
+  const w = currentWedding();
+  w.sposiEmail = document.getElementById('sposiEmailInput').value.trim();
   renderContent();
 }
 
@@ -1792,6 +1818,13 @@ function startDragPin(e, id){
 }
 
 function renderAll(){
+  if(FIREBASE_READY && !currentUser){
+    document.getElementById('tabList').innerHTML = '';
+    document.getElementById('weddingHead').innerHTML = '';
+    document.getElementById('subnav').innerHTML = '';
+    document.getElementById('content').innerHTML = renderLoginScreen();
+    return;
+  }
   renderSidebar();
   renderHeader();
   renderSubnav();
@@ -1799,7 +1832,7 @@ function renderAll(){
 }
 
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
-const PERSIST_FIELDS = ['categorie','fornitori','guests','moodboard','tasks','rsvpChannel'];
+const PERSIST_FIELDS = ['categorie','fornitori','guests','moodboard','tasks','rsvpChannel','sposiEmail'];
 
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
@@ -1813,19 +1846,75 @@ const firebaseConfig = {
   appId: "1:119559846910:web:744aad90831dbea9811eaf"
 };
 
+// STEP OBBLIGATORIO: metti qui l'email (o le email) con cui TU accedi come Wedding Planner —
+// deve essere la stessa che hai creato in Firebase Authentication. Puoi aggiungerne altre separate da virgola.
+const PLANNER_EMAILS = ["mimaritu@monicacoppolino.it"];
+
 const FIREBASE_READY = (firebaseConfig.apiKey !== "INSERISCI_QUI" && typeof firebase !== 'undefined');
 const HAS_STORAGE = (typeof window.storage !== 'undefined' && window.storage);
 
-let fbApp=null, db=null, auth=null, currentUser=null;
+let fbApp=null, db=null, auth=null, currentUser=null, identity=null, accessLogged=false;
 if(FIREBASE_READY){
   fbApp = firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
   auth = firebase.auth();
-  auth.onAuthStateChanged(user=>{
+  auth.onAuthStateChanged(async user=>{
     currentUser = user;
+    accessLogged = false;
+    if(user){
+      identity = resolveIdentity(user.email);
+      if(!identity){
+        document.getElementById('loadingOverlay') && (document.getElementById('loadingOverlay').style.display='none');
+        renderUnrecognizedScreen();
+        return;
+      }
+      applyIdentity(identity);
+      if(!accessLogged){ accessLogged = true; logAccess(identity, user.email); }
+    } else {
+      identity = null;
+    }
+    const overlay = document.getElementById('loadingOverlay');
+    if(overlay) overlay.style.display = 'none';
+    renderAll();
     renderSidebarFoot();
-    if(state.role==='planner') renderContent();
   });
+}
+
+function resolveIdentity(email){
+  email = (email||'').trim().toLowerCase();
+  if(PLANNER_EMAILS.map(e=>e.trim().toLowerCase()).includes(email)) return {role:'planner', email};
+  for(let i=0;i<weddings.length;i++){
+    const w = weddings[i];
+    const f = (w.fornitori||[]).find(x=>(x.email||'').trim().toLowerCase()===email);
+    if(f) return {role:'fornitore', email, weddingIndex:i, supplierRef:f.ref};
+    if((w.sposiEmail||'').trim().toLowerCase()===email) return {role:'sposi', email, weddingIndex:i};
+  }
+  return null;
+}
+
+function applyIdentity(id){
+  state.role = id.role;
+  if(id.role==='planner'){
+    state.subtab='budget';
+  } else if(id.role==='fornitore'){
+    state.weddingIndex = id.weddingIndex;
+    state.supplierRef = id.supplierRef;
+  } else if(id.role==='sposi'){
+    state.weddingIndex = id.weddingIndex;
+    state.subtab='ospiti'; state.guestSubtab='principale';
+  }
+}
+
+async function logAccess(id, email){
+  if(!FIREBASE_READY) return;
+  try{
+    await db.collection('accessLog').add({
+      email, role:id.role,
+      weddingId: id.weddingIndex!==undefined ? weddings[id.weddingIndex].id : null,
+      supplierRef: id.supplierRef || null,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){ console.error('Errore log accesso', e); }
 }
 
 function setSaveStatus(text, color){
@@ -1885,7 +1974,7 @@ async function resetAllData(){
   location.reload();
 }
 
-// ============ LOGIN (solo planner, solo se Firebase è configurato) ============
+// ============ LOGIN UNICO (planner, fornitore, sposi — determinato dall'email) ============
 async function doLogin(){
   const email = document.getElementById('loginEmail').value.trim();
   const pass = document.getElementById('loginPass').value;
@@ -1899,12 +1988,28 @@ async function doLogin(){
 }
 async function doLogout(){
   await auth.signOut();
+  location.reload();
 }
 function renderSidebarFoot(){
   const el = document.getElementById('authStatus');
+  const roleWrap = document.getElementById('roleToggleWrap');
+  const badge = document.getElementById('identityBadge');
+  const badgeText = document.getElementById('identityBadgeText');
+  if(FIREBASE_READY){
+    if(roleWrap) roleWrap.style.display = 'none';
+    if(badge) badge.style.display = '';
+    if(badgeText && identity){
+      const ruoloLabel = identity.role==='planner' ? 'Wedding Planner' : identity.role==='fornitore' ? `Fornitore — ${identity.supplierRef}` : 'Sposi';
+      badgeText.textContent = ruoloLabel;
+    }
+    const isPlanner = identity && identity.role==='planner';
+    const nb = document.getElementById('newWeddingBtn'); if(nb) nb.style.display = isPlanner ? '' : 'none';
+    const rb = document.getElementById('resetDataBtn'); if(rb) rb.style.display = isPlanner ? '' : 'none';
+  }
   if(!el) return;
-  if(FIREBASE_READY && currentUser){
-    el.innerHTML = `Connessa come <b>${currentUser.email}</b> · <button onclick="doLogout()" style="border:none;background:none;color:var(--wine);cursor:pointer;text-decoration:underline;font-size:10.5px;">Esci</button>`;
+  if(FIREBASE_READY && currentUser && identity){
+    const ruoloLabel = identity.role==='planner' ? 'Wedding Planner' : identity.role==='fornitore' ? `Fornitore — ${identity.supplierRef}` : 'Sposi';
+    el.innerHTML = `Connessa come <b>${currentUser.email}</b><br>${ruoloLabel} · <button onclick="doLogout()" style="border:none;background:none;color:var(--wine);cursor:pointer;text-decoration:underline;font-size:10.5px;">Esci</button>`;
   } else if(FIREBASE_READY){
     el.innerHTML = `Non connessa`;
   } else {
@@ -1914,8 +2019,8 @@ function renderSidebarFoot(){
 function renderLoginScreen(){
   return `
     <div class="fornitore-card" style="max-width:360px; margin:40px auto;">
-      <h2>Accesso Wedding Planner</h2>
-      <div class="cat">Inserisci le credenziali del tuo account Firebase</div>
+      <h2>Accesso</h2>
+      <div class="cat">Wedding planner, sposi e fornitori accedono da qui con le proprie credenziali</div>
       <div style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
         <input type="email" id="loginEmail" placeholder="Email" style="padding:9px 10px; border:1px solid var(--rule); border-radius:6px;">
         <input type="password" id="loginPass" placeholder="Password" style="padding:9px 10px; border:1px solid var(--rule); border-radius:6px;">
@@ -1925,14 +2030,57 @@ function renderLoginScreen(){
     </div>
   `;
 }
+function renderUnrecognizedScreen(){
+  document.getElementById('content') && (document.getElementById('content').innerHTML = `
+    <div class="fornitore-card" style="max-width:420px; margin:40px auto; text-align:center;">
+      <h2>Utente non riconosciuto</h2>
+      <div class="cat">Questa email ha effettuato l'accesso ma non risulta collegata a nessun ruolo (Wedding Planner, fornitore o sposi).</div>
+      <div class="criterio-note" style="margin-top:14px; text-align:left;">Contatta la wedding planner per farti associare all'email corretta, oppure controlla di aver digitato l'indirizzo giusto.</div>
+      <button class="btn-mini" style="margin-top:14px;" onclick="doLogout()">Esci e riprova</button>
+    </div>
+  `);
+  const sb = document.getElementById('subnav'); if(sb) sb.innerHTML='';
+  const sd = document.getElementById('tabList'); if(sd) sd.innerHTML='';
+}
+
+// ============ REGISTRO ACCESSI (solo planner) ============
+async function renderAccessLog(){
+  const c = document.getElementById('content');
+  c.innerHTML = `<div class="empty-state">Caricamento registro accessi…</div>`;
+  if(!FIREBASE_READY){ c.innerHTML = `<div class="empty-state">Il registro accessi è disponibile solo nella versione pubblicata con Firebase collegato.</div>`; return; }
+  try{
+    const snap = await db.collection('accessLog').orderBy('timestamp','desc').limit(50).get();
+    if(snap.empty){ c.innerHTML = `<div class="empty-state">Nessun accesso registrato ancora.</div>`; return; }
+    const rows = snap.docs.map(d=>{
+      const x = d.data();
+      const when = x.timestamp && x.timestamp.toDate ? x.timestamp.toDate().toLocaleString('it-IT') : '—';
+      const ruolo = x.role==='planner'?'Wedding Planner': x.role==='fornitore' ? `Fornitore (${x.supplierRef||'—'})` : 'Sposi';
+      const matrimonio = x.weddingId ? (weddings.find(w=>w.id===x.weddingId)?.names || x.weddingId) : '—';
+      return `<tr><td>${when}</td><td>${x.email}</td><td>${ruolo}</td><td>${matrimonio}</td></tr>`;
+    }).join('');
+    c.innerHTML = `
+      <div class="criterio-note">Ultimi 50 accessi, dal più recente. Ogni login viene registrato automaticamente.</div>
+      <table>
+        <thead><tr><th>Quando</th><th>Email</th><th>Ruolo</th><th>Matrimonio</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }catch(e){
+    console.error(e);
+    c.innerHTML = `<div class="empty-state">Non è stato possibile caricare il registro accessi.</div>`;
+  }
+}
 
 async function initApp(){
   for(const w of weddings){ await loadWedding(w); }
-  renderAll();
-  renderSidebarFoot();
-  if(!FIREBASE_READY && !HAS_STORAGE){ setSaveStatus('Salvataggio non disponibile in questa modalità', 'var(--ink-soft)'); }
-  const overlay = document.getElementById('loadingOverlay');
-  if(overlay) overlay.style.display = 'none';
+  if(!FIREBASE_READY){
+    renderAll();
+    renderSidebarFoot();
+    if(!HAS_STORAGE){ setSaveStatus('Salvataggio non disponibile in questa modalità', 'var(--ink-soft)'); }
+    const overlay = document.getElementById('loadingOverlay');
+    if(overlay) overlay.style.display = 'none';
+  }
+  // Se FIREBASE_READY, ci pensa onAuthStateChanged a mostrare login o app
 }
 
 initApp();
