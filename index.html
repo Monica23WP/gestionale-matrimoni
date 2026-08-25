@@ -1318,11 +1318,13 @@ function renderPrincipale(w, guests){
       <input type="text" id="rsvpValore" placeholder="numero o indirizzo email" value="${ch.valore||''}" style="padding:6px 8px; border-radius:6px; border:1px solid var(--rule); min-width:220px;">
       <button class="btn-mini" onclick="saveRsvpChannel()">Salva canale RSVP</button>
     </div>
+    ${state.role==='planner' ? `
     <div class="criterio-note" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
       <div><b>Email di accesso sposi:</b> l'account con cui la coppia farà il login sul sito (deve corrispondere a un utente creato in Firebase Authentication).</div>
       <input type="email" id="sposiEmailInput" placeholder="es. alessandroevaleria@gmail.com" value="${w.sposiEmail||''}" style="padding:6px 8px; border-radius:6px; border:1px solid var(--rule); min-width:260px;">
       <button class="btn-mini" onclick="saveSposiEmail()">Salva email sposi</button>
     </div>
+    ` : ''}
   `;
 
   const formHtml = `
