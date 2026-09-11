@@ -10,6 +10,15 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<!-- Three.js: usato per la vista 3D semplificata della planimetria -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- pdf.js: usato per leggere la prima pagina di un PDF caricato come planimetria -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if(typeof pdfjsLib !== 'undefined'){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 <style>
   @font-face {
     font-family:'Arcon';
@@ -597,7 +606,7 @@
       </div>
     </div>
     <div class="tab-list" id="tabList"></div>
-    <button id="newWeddingBtn" class="tab-new" onclick="alert('In questo prototipo la creazione di un nuovo matrimonio è disattivata — qui vediamo come funziona con dati reali.')">+ Nuovo matrimonio</button>
+    <button id="newWeddingBtn" class="tab-new" onclick="createNewWedding()">+ Nuovo matrimonio</button>
     <div class="sidebar-foot">
       Prototipo — vista planner mostra tutti i matrimoni in gestione.<br>La vista fornitore è limitata a un singolo matrimonio e alla propria scheda.
       <div id="saveStatus" style="margin-top:10px; font-size:10.5px; color:var(--sage);">● Dati salvati</div>
@@ -880,6 +889,12 @@ weddings.forEach(w=>{
     if(!g.transferHC) g.transferHC = {data:'', ora:''};
     if(!g.transferCR) g.transferCR = {data:'', ora:''};
   });
+  if(w.moodboard && w.moodboard.floorplan){
+    const fp = w.moodboard.floorplan;
+    if(fp.referenceImage===undefined) fp.referenceImage = null;
+    if(fp.dxfEntities===undefined) fp.dxfEntities = null;
+    if(fp.dxfBounds===undefined) fp.dxfBounds = null;
+  }
 });
 // Alcuni esempi compilati per mostrare come apparirebbe una lista già iniziata dagli sposi
 if(weddings[0].guests.length){
@@ -899,7 +914,78 @@ function fmtEuro(n){
   return n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
 }
 
+function createNewWedding(){
+  const names = prompt('Nome della coppia (es. "Marco & Giulia"):');
+  if(!names) return;
+  const date = prompt('Data del matrimonio (es. "12 Settembre 2026"):') || '';
+  const location = prompt('Location:') || '';
+  const chiesa = prompt('Chiesa (lascia vuoto se non c\'è):') || '';
+  let id = names.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || ('matrimonio-'+Date.now());
+  if(weddings.find(w=>w.id===id)) id = id + '-' + Date.now();
+  const nuovo = {
+    id, names, date, location, chiesa,
+    budgetTotale:0, budgetStimato:0, imprevisti:0,
+    categorie:[], fornitori:[], guests:[],
+    moodboard:{ palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} },
+    tasks:{}, rsvpChannel:{tipo:'', valore:''}, sposiEmail:''
+  };
+  weddings.push(nuovo);
+  state.weddingIndex = weddings.length-1;
+  state.subtab='budget';
+  persistWedding(nuovo);
+  renderAll();
+}
+
 function currentWedding(){ return weddings[state.weddingIndex]; }
+
+function addVoce(catNome, sgNome){
+  const nome = prompt('Nome della nuova voce:');
+  if(!nome) return;
+  const w = currentWedding();
+  const cat = w.categorie.find(c=>c.nome===catNome);
+  const arr = sgNome ? cat.sottogruppi.find(s=>s.nome===sgNome).voci : cat.voci;
+  arr.push({v:nome, q:1, prezzo:0, stimato:0, speso:null, stato:null});
+  recomputeCategoryTotals(w);
+  persistWedding(w);
+  renderContent();
+}
+function addCategoria(){
+  const nome = document.getElementById('newCatNome').value.trim();
+  if(!nome) return;
+  const w = currentWedding();
+  w.categorie.push({nome: nome.toUpperCase(), stimato:0, speso:0, voci:[]});
+  persistWedding(w);
+  renderContent();
+}
+
+function updateVoceField(catNome, sgNome, idx, field, value){
+  const w = currentWedding();
+  const cat = w.categorie.find(c=>c.nome===catNome);
+  const arr = sgNome ? cat.sottogruppi.find(s=>s.nome===sgNome).voci : cat.voci;
+  const v = arr[idx];
+  if(field==='q'){
+    v.q = parseFloat(value)||0;
+    v.stimato = Math.round((v.q * (v.prezzo||0))*100)/100;
+  } else if(field==='prezzo'){
+    v.prezzo = parseFloat(value)||0;
+    v.stimato = Math.round(((v.q||0) * v.prezzo)*100)/100;
+  } else if(field==='speso'){
+    v.speso = value===''? null : (parseFloat(value)||0);
+  } else if(field==='stato'){
+    v.stato = value===''? null : value;
+  }
+  recomputeCategoryTotals(w);
+  persistWedding(w);
+  renderContent();
+}
+
+function recomputeCategoryTotals(w){
+  w.categorie.forEach(cat=>{
+    const allVoci = cat.sottogruppi ? cat.sottogruppi.flatMap(sg=>sg.voci) : cat.voci;
+    cat.stimato = Math.round(allVoci.reduce((a,v)=>a+(v.stimato||0),0)*100)/100;
+    cat.speso = Math.round(allVoci.reduce((a,v)=>a+(v.speso||0),0)*100)/100;
+  });
+}
 
 function renderSidebar(){
   const list = document.getElementById('tabList');
@@ -922,6 +1008,7 @@ function selectWedding(i){
   state.guestSubtab='principale';
   state.guestFilter='';
   state.schedeSupplier=null;
+  state.floorplanView='2d';
   renderAll();
 }
 
@@ -937,11 +1024,30 @@ function onRoleChange(){
 function renderHeader(){
   const w = currentWedding();
   const head = document.getElementById('weddingHead');
-  head.innerHTML = `
-    <div class="eyebrow">Matrimonio</div>
-    <h1>${w.names}</h1>
-    <div class="meta"><b>${w.date}</b> · ${w.location} · Chiesa: ${w.chiesa}</div>
-  `;
+  if(state.role==='planner'){
+    head.innerHTML = `
+      <div class="eyebrow">Matrimonio</div>
+      <input type="text" value="${w.names}" onchange="updateWeddingField('names',this.value)" style="font-family:'Arcon',sans-serif; font-weight:700; font-size:26px; color:var(--ink); border:1px solid transparent; border-radius:6px; padding:2px 4px; background:transparent; width:100%; max-width:420px;" onfocus="this.style.borderColor='var(--rule)'" onblur="this.style.borderColor='transparent'">
+      <div class="meta" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+        <input type="text" value="${w.date}" onchange="updateWeddingField('date',this.value)" style="font-size:12.5px; font-weight:600; border:1px solid var(--rule); border-radius:5px; padding:3px 6px; width:130px;">
+        <span>·</span>
+        <input type="text" value="${w.location}" onchange="updateWeddingField('location',this.value)" style="font-size:12.5px; border:1px solid var(--rule); border-radius:5px; padding:3px 6px; width:180px;">
+        <span>· Chiesa:</span>
+        <input type="text" value="${w.chiesa}" onchange="updateWeddingField('chiesa',this.value)" style="font-size:12.5px; border:1px solid var(--rule); border-radius:5px; padding:3px 6px; width:220px;">
+      </div>
+    `;
+  } else {
+    head.innerHTML = `
+      <div class="eyebrow">Matrimonio</div>
+      <h1>${w.names}</h1>
+      <div class="meta"><b>${w.date}</b> · ${w.location} · Chiesa: ${w.chiesa}</div>
+    `;
+  }
+}
+function updateWeddingField(field, value){
+  currentWedding()[field] = value;
+  persistWedding(currentWedding());
+  renderSidebar();
 }
 
 function renderSubnav(){
@@ -973,32 +1079,40 @@ function renderContent(){
   if(state.subtab==='budget'){
     const totSpeso = w.categorie.reduce((a,cat)=>a+cat.speso,0);
     const rimanente = w.budgetTotale - totSpeso;
-    const voceRow = (v)=>{
+    const voceRow = (v, catNome, sgNome, idx)=>{
       const conIva = Math.round(v.stimato*1.22*100)/100;
       const delta = Math.round((conIva-(v.speso||0))*100)/100;
+      const ref = `'${catNome.replace(/'/g,"\\'")}', ${sgNome?`'${sgNome.replace(/'/g,"\\'")}'`:'null'}, ${idx}`;
       return `
         <tr>
           <td>${v.v}</td>
-          <td class="num">${v.q!==undefined ? v.q : '—'}</td>
-          <td class="num">${v.prezzo!==undefined ? fmtEuro(v.prezzo) : '—'}</td>
+          <td class="num"><input type="number" step="1" value="${v.q!==undefined?v.q:0}" onchange="updateVoceField(${ref},'q',this.value)" style="width:56px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
+          <td class="num"><input type="number" step="0.01" value="${v.prezzo!==undefined?v.prezzo:0}" onchange="updateVoceField(${ref},'prezzo',this.value)" style="width:72px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
           <td class="num">22%</td>
           <td class="num">${fmtEuro(v.stimato)}</td>
           <td class="num">${fmtEuro(conIva)}</td>
-          <td class="num">${fmtEuro(v.speso)}</td>
-          <td class="num ${delta<0?'':''}" style="color:${delta<0?'var(--wine)':'var(--ink)'}">${fmtEuro(delta)}</td>
-          <td>${v.stato ? `<span class="stamp ${v.stato}">${v.stato}</span>` : ''}</td>
+          <td class="num"><input type="number" step="0.01" value="${v.speso!==null&&v.speso!==undefined?v.speso:''}" placeholder="—" onchange="updateVoceField(${ref},'speso',this.value)" style="width:76px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
+          <td class="num" style="color:${delta<0?'var(--wine)':'var(--ink)'}">${fmtEuro(delta)}</td>
+          <td>
+            <select onchange="updateVoceField(${ref},'stato',this.value)" style="border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-size:11.5px;">
+              <option value="" ${!v.stato?'selected':''}>—</option>
+              <option value="saldato" ${v.stato==='saldato'?'selected':''}>Saldato</option>
+              <option value="acconto" ${v.stato==='acconto'?'selected':''}>Acconto</option>
+              <option value="omaggio" ${v.stato==='omaggio'?'selected':''}>Omaggio</option>
+            </select>
+          </td>
         </tr>
       `;
     };
     const voceHead = `<tr><th>Voce</th><th class="num">Q.tà</th><th class="num">Prezzo unit.</th><th class="num">IVA</th><th class="num">Stimato netto</th><th class="num">Totale con IVA</th><th class="num">Speso effettivo</th><th class="num">Delta</th><th>Stato</th></tr>`;
     c.innerHTML = `
       <div class="cards">
-        <div class="card"><div class="label">Budget totale</div><div class="value">${fmtEuro(w.budgetTotale)}</div></div>
-        <div class="card"><div class="label">Stimato</div><div class="value">${fmtEuro(w.budgetStimato)}</div></div>
+        <div class="card"><div class="label">Budget totale</div><input type="number" step="0.01" value="${w.budgetTotale}" onchange="updateWeddingField('budgetTotale', parseFloat(this.value)||0)" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--ink); border:none; background:transparent; padding:0;"></div>
+        <div class="card"><div class="label">Stimato</div><input type="number" step="0.01" value="${w.budgetStimato}" onchange="updateWeddingField('budgetStimato', parseFloat(this.value)||0)" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--ink); border:none; background:transparent; padding:0;"></div>
         <div class="card ok"><div class="label">Speso finora</div><div class="value">${fmtEuro(totSpeso)}</div></div>
         <div class="card ${rimanente<3000?'warn':''}"><div class="label">Residuo disponibile</div><div class="value">${fmtEuro(rimanente)}</div></div>
       </div>
-      <div class="criterio-note">IVA calcolata al 22% su ogni voce. "Totale con IVA" = stimato netto × 1,22. "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale con IVA previsto).</div>
+      <div class="criterio-note">IVA calcolata al 22% su ogni voce. "Totale con IVA" = stimato netto × 1,22 (calcolato in automatico da quantità × prezzo unitario). "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale con IVA previsto). Clicca su quantità, prezzo, speso o stato per modificarli.</div>
       ${w.categorie.map(cat=>`
         <div class="cat-block">
           <div class="cat-title">
@@ -1011,20 +1125,26 @@ function renderContent(){
               <div style="overflow-x:auto;">
               <table style="min-width:920px;">
                 <thead>${voceHead}</thead>
-                <tbody>${sg.voci.map(voceRow).join('')}</tbody>
+                <tbody>${sg.voci.map((v,idx)=>voceRow(v,cat.nome,sg.nome,idx)).join('')}</tbody>
               </table>
               </div>
+              <button class="btn-mini" style="margin-top:6px; font-size:11px;" onclick="addVoce('${cat.nome.replace(/'/g,"\\'")}','${sg.nome.replace(/'/g,"\\'")}')">+ Aggiungi voce a ${sg.nome}</button>
             </div>
           `).join('') : `
           <div style="overflow-x:auto;">
           <table style="min-width:920px;">
             <thead>${voceHead}</thead>
-            <tbody>${cat.voci.map(voceRow).join('')}</tbody>
+            <tbody>${cat.voci.map((v,idx)=>voceRow(v,cat.nome,null,idx)).join('')}</tbody>
           </table>
           </div>
+          <button class="btn-mini" style="margin-top:6px; font-size:11px;" onclick="addVoce('${cat.nome.replace(/'/g,"\\'")}', null)">+ Aggiungi voce</button>
           `}
         </div>
       `).join('')}
+      <div class="add-row" style="margin-top:6px;">
+        <input type="text" id="newCatNome" placeholder="Nome nuova categoria (es. INTRATTENIMENTO)">
+        <button onclick="addCategoria()">+ Aggiungi categoria</button>
+      </div>
     `;
   }
 
@@ -1040,22 +1160,32 @@ function renderContent(){
   }
 
   if(state.subtab==='fornitori'){
-    if(!w.fornitori.length){ c.innerHTML = `<div class="empty-state">Nessun fornitore ancora registrato per questo matrimonio.</div>`; return; }
+    const addFornitoreForm = `
+      <div class="guest-form">
+        <div><label>Categoria</label><input type="text" id="nfCat" placeholder="es. Location"></div>
+        <div><label>Nome fornitore</label><input type="text" id="nfNome" placeholder="es. Noleggio tavoli"></div>
+        <div><label>Referente</label><input type="text" id="nfRef" placeholder="es. Mario Rossi"></div>
+        <div><label>Email di accesso</label><input type="email" id="nfEmail" placeholder="opzionale"></div>
+        <div class="submit-cell"><button class="btn-mini" onclick="addFornitore()">+ Aggiungi fornitore</button></div>
+      </div>
+    `;
+    if(!w.fornitori.length){ c.innerHTML = addFornitoreForm + `<div class="empty-state">Nessun fornitore ancora registrato per questo matrimonio.</div>`; return; }
     const groups = {};
-    w.fornitori.forEach(f=>{ (groups[f.cat] ||= []).push(f); });
-    c.innerHTML = Object.entries(groups).map(([cat,list])=>`
+    w.fornitori.forEach((f,i)=>{ (groups[f.cat] ||= []).push({...f, _idx:i}); });
+    c.innerHTML = addFornitoreForm + Object.entries(groups).map(([cat,list])=>`
       <div class="cat-block">
         <div class="cat-title"><h3>${cat}</h3></div>
         <table>
-          <thead><tr><th>Fornitore</th><th>Referente</th><th>Contattato</th><th>Prenotato</th><th>Note</th></tr></thead>
+          <thead><tr><th>Fornitore</th><th>Referente</th><th>Contattato</th><th>Prenotato</th><th>Note</th><th></th></tr></thead>
           <tbody>
             ${list.map(f=>`
               <tr>
-                <td>${f.nome}</td>
-                <td>${f.ref}</td>
-                <td class="check ${f.contattato?'yes':'no'}">${f.contattato?'✓':'—'}</td>
-                <td class="check ${f.prenotato?'yes':'no'}">${f.prenotato?'✓':'—'}</td>
-                <td>${f.note||''}</td>
+                <td><input type="text" value="${f.nome}" onchange="updateFornitoreByIndex(${f._idx},'nome',this.value)" style="width:100%; border:none; background:none; font-size:13px;"></td>
+                <td><input type="text" value="${f.ref}" onchange="updateFornitoreByIndex(${f._idx},'ref',this.value)" style="width:100%; border:none; background:none; font-size:13px;"></td>
+                <td><input type="checkbox" ${f.contattato?'checked':''} onchange="toggleFornitoreFlag('${f.ref.replace(/'/g,"\\'")}','contattato',this.checked)"></td>
+                <td><input type="checkbox" ${f.prenotato?'checked':''} onchange="toggleFornitoreFlag('${f.ref.replace(/'/g,"\\'")}','prenotato',this.checked)"></td>
+                <td><input type="text" value="${f.note||''}" onchange="updateFornitoreField('${f.ref.replace(/'/g,"\\'")}','note',this.value)" style="width:100%; border:none; background:none; font-size:13px;"></td>
+                <td><button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeFornitore(${f._idx})">rimuovi</button></td>
               </tr>
             `).join('')}
           </tbody>
@@ -1072,7 +1202,10 @@ function renderContent(){
 
   if(state.subtab==='moodboard'){
     c.innerHTML = renderMoodboard(w);
-    if(!state.moodSubtab || state.moodSubtab==='planimetria') attachDrag(w);
+    if(!state.moodSubtab || state.moodSubtab==='planimetria'){
+      if(state.floorplanView==='3d') render3DScene(w.moodboard.floorplan);
+      else attachDrag(w);
+    }
     persistWedding(w);
     return;
   }
@@ -1235,6 +1368,30 @@ function renderSchedeFornitori(w){
   return selectHtml + schedaHtml;
 }
 
+function addFornitore(){
+  const cat = document.getElementById('nfCat').value.trim();
+  const nome = document.getElementById('nfNome').value.trim();
+  const ref = document.getElementById('nfRef').value.trim();
+  const email = document.getElementById('nfEmail').value.trim();
+  if(!cat || !nome || !ref) return;
+  const w = currentWedding();
+  w.fornitori.push({cat, nome, ref, email, contattato:false, prenotato:false, note:'', schedaTecnica:[]});
+  w.tasks[ref] = w.tasks[ref] || [];
+  persistWedding(w);
+  renderContent();
+}
+function updateFornitoreByIndex(idx, field, value){
+  const w = currentWedding();
+  w.fornitori[idx][field] = value;
+  persistWedding(w);
+}
+function removeFornitore(idx){
+  if(!confirm('Rimuovere questo fornitore?')) return;
+  const w = currentWedding();
+  w.fornitori.splice(idx,1);
+  persistWedding(w);
+  renderContent();
+}
 function toggleFornitoreFlag(ref, field, value){
   const f = currentWedding().fornitori.find(x=>x.ref===ref);
   f[field] = value;
@@ -1363,6 +1520,27 @@ function renderPrincipale(w, guests){
     return rsvpBox + formHtml + `<div class="empty-state">Nessun invitato ancora inserito.</div>`;
   }
 
+  if(!state.guestSort) state.guestSort = {field:'', dir:'asc'};
+  const sortBar = `
+    <div class="supplier-select-wrap" style="margin-top:4px;">
+      <label>Ordina per</label>
+      <select onchange="setGuestSort(this.value)">
+        <option value="" ${state.guestSort.field===''?'selected':''}>Come inserito</option>
+        <option value="cognome" ${state.guestSort.field==='cognome'?'selected':''}>Cognome</option>
+        <option value="nome" ${state.guestSort.field==='nome'?'selected':''}>Nome</option>
+        <option value="tavolo" ${state.guestSort.field==='tavolo'?'selected':''}>Tavolo</option>
+        <option value="menu" ${state.guestSort.field==='menu'?'selected':''}>Menu</option>
+        <option value="rsvp" ${state.guestSort.field==='rsvp'?'selected':''}>RSVP</option>
+      </select>
+    </div>
+  `;
+
+  let pairs = guests.map((g,i)=>({g,i}));
+  if(state.guestSort.field){
+    const f = state.guestSort.field;
+    pairs.sort((a,b)=> (''+a.g[f]).localeCompare(''+b.g[f], 'it', {numeric:true}));
+  }
+
   const tableHtml = `
     <div style="overflow-x:auto;">
     <table style="min-width:1180px;">
@@ -1371,7 +1549,7 @@ function renderPrincipale(w, guests){
         <th>Transfer Aeroporto → Hotel</th><th>Transfer Hotel → Cerimonia</th><th>Transfer Cerimonia → Ricevimento</th><th></th>
       </tr></thead>
       <tbody>
-        ${guests.map((g,idx)=>`
+        ${pairs.map(({g,i:idx})=>`
           <tr>
             <td>${g.cognome}</td>
             <td>${g.nome}</td>
@@ -1396,9 +1574,12 @@ function renderPrincipale(w, guests){
     </div>
   `;
 
-  return rsvpBox + formHtml + tableHtml;
+  return rsvpBox + formHtml + sortBar + tableHtml;
 }
-
+function setGuestSort(field){
+  state.guestSort = {field, dir:'asc'};
+  renderContent();
+}
 function transferCell(idx, field, t){
   t = t || {data:'',ora:''};
   return `
@@ -1550,7 +1731,20 @@ function renderCucina(guests){
   const counts = {};
   guests.forEach(g=>{ counts[g.menu] = (counts[g.menu]||0)+1; });
   const conIntoll = guests.filter(g=>g.intolleranze).length;
-  const sorted = [...guests].sort((a,b)=> a.menu.localeCompare(b.menu) || a.cognome.localeCompare(b.cognome));
+  if(!state.guestSortCucina) state.guestSortCucina = 'menu';
+  const sortField = state.guestSortCucina;
+  const sorted = [...guests].sort((a,b)=> (''+a[sortField]).localeCompare(''+b[sortField], 'it', {numeric:true}) || a.cognome.localeCompare(b.cognome));
+  const sortBar = `
+    <div class="supplier-select-wrap" style="margin-bottom:10px;">
+      <label>Ordina per</label>
+      <select onchange="setGuestSortCucina(this.value)">
+        <option value="cognome" ${sortField==='cognome'?'selected':''}>Cognome</option>
+        <option value="nome" ${sortField==='nome'?'selected':''}>Nome</option>
+        <option value="tavolo" ${sortField==='tavolo'?'selected':''}>Tavolo</option>
+        <option value="menu" ${sortField==='menu'?'selected':''}>Menu</option>
+      </select>
+    </div>
+  `;
   return `
     <div class="cards">
       ${Object.keys(MENU_LABELS).map(k=>`
@@ -1559,6 +1753,7 @@ function renderCucina(guests){
       <div class="card warn"><div class="label">Con intolleranze</div><div class="value">${conIntoll}</div></div>
       <div class="card"><div class="label">Totale coperti</div><div class="value">${guests.length}</div></div>
     </div>
+    ${sortBar}
     <table>
       <thead><tr><th>Cognome</th><th>Nome</th><th>Tavolo</th><th>Menu</th><th>Intolleranze / note</th><th></th></tr></thead>
       <tbody>
@@ -1577,6 +1772,10 @@ function renderCucina(guests){
       </tbody>
     </table>
   `;
+}
+function setGuestSortCucina(field){
+  state.guestSortCucina = field;
+  renderContent();
 }
 
 function renderSala(guests){
@@ -1755,6 +1954,22 @@ function uploadStationeryImage(i, input){
 
 function renderFloorplan(w, mb){
   const fp = mb.floorplan;
+  if(!state.floorplanView) state.floorplanView = '2d';
+
+  const uploadBar = `
+    <div class="add-row">
+      <label class="btn-mini" style="cursor:pointer;">Carica planimetria (immagine o PDF)
+        <input type="file" accept="image/*,.pdf" style="display:none;" onchange="uploadFloorplanImage(this)">
+      </label>
+      <label class="btn-mini" style="cursor:pointer; background:var(--paper-darker); color:var(--ink);">Carica file DXF (AutoCAD)
+        <input type="file" accept=".dxf" style="display:none;" onchange="uploadFloorplanDXF(this)">
+      </label>
+      ${fp.referenceImage || fp.dxfEntities ? `<button class="btn-mini" style="background:var(--wine);" onclick="clearFloorplanBackground()">Rimuovi planimetria caricata</button>` : ''}
+      <button class="btn-mini" style="background:${state.floorplanView==='3d'?'var(--ink)':'var(--gold)'}; color:${state.floorplanView==='3d'?'var(--white-ish)':'var(--ink)'};" onclick="toggleFloorplanView()">${state.floorplanView==='3d' ? '← Torna alla vista 2D' : 'Visualizza in 3D'}</button>
+    </div>
+    ${fp.dxfEntities ? `<div class="floorplan-hint">File DXF caricato: ${fp.dxfEntities.length} elementi. Nota: solo il disegno (linee/forme) — i file .DWG nativi di AutoCAD non sono leggibili da un sito web, serve l'esportazione in .DXF.</div>` : ''}
+  `;
+
   const tablesHtml = [];
   const perRow = 5;
   for(let t=1; t<=(fp.tables||0); t++){
@@ -1763,29 +1978,281 @@ function renderFloorplan(w, mb){
     tablesHtml.push(`<div class="table-dot" style="top:${44+row*13}%; left:${8+col*10}%">${t}</div>`);
   }
   const staffHtml = fp.staffTable ? `<div class="staff-table" style="top:38%; left:8%">${fp.staffTable}</div>` : '';
-  const zonesHtml = (fp.zones||[]).map(z=>`<div class="zone-label" style="top:${z.top}; left:${z.left}">${z.label}</div>`).join('');
+  const zonesHtml = fp.referenceImage || fp.dxfEntities ? '' : (fp.zones||[]).map(z=>`<div class="zone-label" style="top:${z.top}; left:${z.left}">${z.label}</div>`).join('');
   const pinsHtml = (fp.stations||[]).map(s=>`
     <div class="station-pin" data-id="${s.id}" style="left:${s.x}%; top:${s.y}%" onpointerdown="startDragPin(event, ${s.id})">
       <span class="n">${s.id}</span>${s.label}
     </div>
   `).join('');
 
+  const bgStyle = fp.referenceImage ? `background-image:url(${fp.referenceImage}); background-size:contain; background-repeat:no-repeat; background-position:center; background-color:#fff;` : '';
+  const dxfSvg = fp.dxfEntities && !fp.referenceImage ? renderDxfSvg(fp) : '';
+
+  const settingsBar = `
+    <div class="add-row">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">N. tavoli invitati</label>
+      <input type="number" min="0" value="${fp.tables||0}" onchange="updateFloorplanField('tables', parseInt(this.value)||0)" style="width:70px; padding:6px 8px; border:1px solid var(--rule); border-radius:6px;">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">Tavolo staff</label>
+      <input type="text" value="${fp.staffTable||''}" placeholder="es. 1 tavolo staff (legno, 2,30m)" onchange="updateFloorplanField('staffTable', this.value)" style="min-width:220px; padding:6px 8px; border:1px solid var(--rule); border-radius:6px;">
+    </div>
+    <div class="add-row">
+      <input type="text" id="newStationLabel" placeholder="es. Postazione sigari e rum">
+      <button onclick="addStation()">+ Aggiungi postazione</button>
+    </div>
+  `;
+
   if(!fp.stations || !fp.stations.length){
-    return `<div class="empty-state">Nessuna planimetria ancora impostata per questo matrimonio.</div>`;
+    return uploadBar + settingsBar + `<div class="empty-state">Nessuna postazione ancora impostata — aggiungine una qui sopra.</div>`;
   }
 
-  return `
-    <div class="floorplan-wrap" id="floorplanWrap">
+  if(state.floorplanView==='3d'){
+    return uploadBar + settingsBar + `
+      <div id="floorplan3dWrap" style="position:relative; width:100%; height:520px; border:1px solid var(--rule); border-radius:12px; overflow:hidden; background:#eef3f8;"></div>
+      <div class="floorplan-hint">Vista 3D semplificata: tavoli e postazioni posizionati secondo la planimetria 2D. Trascina per ruotare, rotellina per zoom. Non è una ricostruzione architettonica del disegno CAD, ma una visualizzazione d'insieme dei posizionamenti.</div>
+      <div class="floorplan-legend">
+        ${(fp.stations||[]).map(s=>`<span><b>${s.id}</b> — ${s.label}</span>`).join('')}
+      </div>
+    `;
+  }
+
+  return uploadBar + settingsBar + `
+    <div class="floorplan-wrap" id="floorplanWrap" style="${bgStyle}">
+      ${dxfSvg}
       ${zonesHtml}
       ${tablesHtml.join('')}
       ${staffHtml}
       ${pinsHtml}
     </div>
     <div class="floorplan-legend">
-      ${(fp.stations||[]).map(s=>`<span><b>${s.id}</b> — ${s.label}</span>`).join('')}
+      ${(fp.stations||[]).map(s=>`<span><b>${s.id}</b> — ${s.label} <button onclick="removeStation(${s.id})" style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:10px;">rimuovi</button></span>`).join('')}
     </div>
     <div class="floorplan-hint">Trascina le postazioni numerate per riorganizzare la planimetria. I pallini rappresentano i ${fp.tables} tavoli invitati.</div>
   `;
+}
+
+function renderDxfSvg(fp){
+  const b = fp.dxfBounds;
+  if(!b) return '';
+  const w = b.maxX-b.minX || 1, h = b.maxY-b.minY || 1;
+  const lines = fp.dxfEntities.map(e=>{
+    const x1 = ((e.x1-b.minX)/w*100).toFixed(2), y1 = (100-(e.y1-b.minY)/h*100).toFixed(2);
+    const x2 = ((e.x2-b.minX)/w*100).toFixed(2), y2 = (100-(e.y2-b.minY)/h*100).toFixed(2);
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#2D337A" stroke-width="0.3" vector-effect="non-scaling-stroke"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;">${lines}</svg>`;
+}
+
+function toggleFloorplanView(){
+  state.floorplanView = state.floorplanView==='3d' ? '2d' : '3d';
+  renderContent();
+}
+
+function clearFloorplanBackground(){
+  const w = currentWedding();
+  w.moodboard.floorplan.referenceImage = null;
+  w.moodboard.floorplan.dxfEntities = null;
+  w.moodboard.floorplan.dxfBounds = null;
+  persistWedding(w);
+  renderContent();
+}
+
+function uploadFloorplanImage(input){
+  const file = input.files[0];
+  if(!file) return;
+  const w = currentWedding();
+  if(file.type === 'application/pdf'){
+    const reader = new FileReader();
+    reader.onload = async e=>{
+      try{
+        if(typeof pdfjsLib === 'undefined'){
+          alert('Il supporto PDF non è disponibile in questo momento — prova con un\'immagine (JPG/PNG) della planimetria.');
+          return;
+        }
+        const pdf = await pdfjsLib.getDocument({data:e.target.result}).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({scale:2});
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await page.render({canvasContext:canvas.getContext('2d'), viewport}).promise;
+        w.moodboard.floorplan.referenceImage = canvas.toDataURL('image/png');
+        w.moodboard.floorplan.dxfEntities = null; w.moodboard.floorplan.dxfBounds = null;
+        persistWedding(w);
+        renderContent();
+      }catch(err){ console.error(err); alert('Non sono riuscita a leggere questo PDF.'); }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = e=>{
+      w.moodboard.floorplan.referenceImage = e.target.result;
+      w.moodboard.floorplan.dxfEntities = null; w.moodboard.floorplan.dxfBounds = null;
+      persistWedding(w);
+      renderContent();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function uploadFloorplanDXF(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const {entities, bounds} = parseDXF(e.target.result);
+      if(!entities.length){ alert('Non ho trovato linee leggibili in questo file DXF.'); return; }
+      const w = currentWedding();
+      w.moodboard.floorplan.dxfEntities = entities;
+      w.moodboard.floorplan.dxfBounds = bounds;
+      w.moodboard.floorplan.referenceImage = null;
+      persistWedding(w);
+      renderContent();
+    }catch(err){ console.error(err); alert('Non sono riuscita a leggere questo file DXF.'); }
+  };
+  reader.readAsText(file);
+}
+
+// Lettore DXF minimale: estrae segmenti da LINE e LWPOLYLINE (i tipi più comuni nelle planimetrie)
+function parseDXF(text){
+  const lines = text.split(/\r\n|\r|\n/);
+  const entities = [];
+  let i = 0;
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  function upd(x,y){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+  while(i < lines.length-1){
+    const code = lines[i].trim();
+    const value = lines[i+1] ? lines[i+1].trim() : '';
+    if(code==='0' && value==='LINE'){
+      let x1,y1,x2,y2;
+      let j = i+2;
+      while(j < lines.length-1 && lines[j].trim() !== '0'){
+        const c = lines[j].trim(), v = parseFloat(lines[j+1]);
+        if(c==='10') x1=v; if(c==='20') y1=v;
+        if(c==='11') x2=v; if(c==='21') y2=v;
+        j+=2;
+      }
+      if(x1!==undefined && y1!==undefined && x2!==undefined && y2!==undefined){
+        entities.push({x1,y1,x2,y2});
+        upd(x1,y1); upd(x2,y2);
+      }
+      i = j;
+    } else if(code==='0' && (value==='LWPOLYLINE' || value==='POLYLINE')){
+      let j = i+2;
+      const pts = [];
+      let curX, curY;
+      while(j < lines.length-1 && lines[j].trim() !== '0'){
+        const c = lines[j].trim(), v = parseFloat(lines[j+1]);
+        if(c==='10'){ curX=v; }
+        if(c==='20'){ curY=v; if(curX!==undefined){ pts.push([curX,curY]); } }
+        j+=2;
+      }
+      for(let k=0;k<pts.length-1;k++){
+        entities.push({x1:pts[k][0], y1:pts[k][1], x2:pts[k+1][0], y2:pts[k+1][1]});
+        upd(pts[k][0],pts[k][1]); upd(pts[k+1][0],pts[k+1][1]);
+      }
+      i = j;
+    } else {
+      i += 2;
+    }
+  }
+  return { entities, bounds: entities.length ? {minX,minY,maxX,maxY} : null };
+}
+
+function render3DScene(fp){
+  const container = document.getElementById('floorplan3dWrap');
+  if(!container || typeof THREE === 'undefined') return;
+  container.innerHTML = '';
+  const w = container.clientWidth, h = container.clientHeight;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xeef3f8);
+  const camera = new THREE.PerspectiveCamera(50, w/h, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(w,h);
+  container.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+  dir.position.set(5,10,5);
+  scene.add(dir);
+
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(20,20), new THREE.MeshStandardMaterial({color:0xffffff}));
+  ground.rotation.x = -Math.PI/2;
+  scene.add(ground);
+
+  const perRow = 5;
+  for(let t=1; t<=(fp.tables||0); t++){
+    const row = Math.floor((t-1)/perRow), col = (t-1)%perRow;
+    const x = (col-2)*2.2, z = row*2.2 - 1;
+    const table = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.4,20), new THREE.MeshStandardMaterial({color:0xF5F0E2}));
+    table.position.set(x,0.2,z);
+    scene.add(table);
+  }
+  (fp.stations||[]).forEach(s=>{
+    const x = (s.x/100-0.5)*18, z = (s.y/100-0.5)*18;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.2,8), new THREE.MeshStandardMaterial({color:0x7A2635}));
+    pole.position.set(x,0.6,z);
+    scene.add(pole);
+    const marker = new THREE.Mesh(new THREE.SphereGeometry(0.18,16,16), new THREE.MeshStandardMaterial({color:0xEEB549}));
+    marker.position.set(x,1.25,z);
+    scene.add(marker);
+  });
+
+  camera.position.set(0,10,12);
+  camera.lookAt(0,0,0);
+
+  let rotY=0, rotX=-0.6, dist=14, dragging=false, lastX=0, lastY=0;
+  function updateCam(){
+    camera.position.x = dist*Math.sin(rotY)*Math.cos(rotX);
+    camera.position.z = dist*Math.cos(rotY)*Math.cos(rotX);
+    camera.position.y = dist*Math.sin(-rotX)+4;
+    camera.lookAt(0,0,0);
+  }
+  updateCam();
+  renderer.domElement.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+  window.addEventListener('pointerup', ()=>{ dragging=false; });
+  window.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    rotY += (e.clientX-lastX)*0.01;
+    rotX = Math.max(-1.2, Math.min(0.2, rotX + (e.clientY-lastY)*0.01));
+    lastX=e.clientX; lastY=e.clientY;
+    updateCam();
+  });
+  renderer.domElement.addEventListener('wheel', e=>{
+    dist = Math.max(5, Math.min(30, dist + e.deltaY*0.01));
+    updateCam();
+    e.preventDefault();
+  }, {passive:false});
+
+  function animate(){
+    if(!document.getElementById('floorplan3dWrap')) return; // vista chiusa, ferma il loop
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+
+function updateFloorplanField(field, value){
+  const w = currentWedding();
+  w.moodboard.floorplan[field] = value;
+  persistWedding(w);
+  renderContent();
+}
+function addStation(){
+  const label = document.getElementById('newStationLabel').value.trim();
+  if(!label) return;
+  const w = currentWedding();
+  const fp = w.moodboard.floorplan;
+  const nextId = fp.stations.length ? Math.max(...fp.stations.map(s=>s.id))+1 : 1;
+  fp.stations.push({id:nextId, label, x:50, y:50});
+  persistWedding(w);
+  renderContent();
+}
+function removeStation(id){
+  const w = currentWedding();
+  const fp = w.moodboard.floorplan;
+  fp.stations = fp.stations.filter(s=>s.id!==id);
+  persistWedding(w);
+  renderContent();
 }
 
 let dragState = null;
