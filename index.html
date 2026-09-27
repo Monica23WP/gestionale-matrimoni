@@ -14,6 +14,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <!-- pdf.js: usato per leggere la prima pagina di un PDF caricato come planimetria -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- SheetJS: usato per l'esportazione in Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
   if(typeof pdfjsLib !== 'undefined'){
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -577,6 +579,32 @@
   .accoglienza-row .who b{ font-weight:600; }
   .accoglienza-row .where{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); }
 
+  /* ============ EXPORT TOOLBAR ============ */
+  .export-toolbar{
+    display:flex; gap:8px; padding:10px 36px;
+    border-bottom:1px solid var(--rule); background:var(--paper);
+    flex-wrap:wrap; align-items:center;
+  }
+  .export-toolbar span{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-right:4px;}
+  .export-toolbar button{
+    font-family:'Inter',sans-serif; font-size:12px; font-weight:500;
+    padding:6px 12px; border-radius:6px; border:1px solid var(--ink);
+    background:var(--white-ish); color:var(--ink); cursor:pointer;
+  }
+  .export-toolbar button:hover{ background:var(--ink); color:var(--white-ish); }
+  tr[data-include="0"] .inc-label{ text-decoration:line-through; color:var(--ink-soft); opacity:0.55; }
+
+  @media print{
+    .sidebar, .topbar .role-toggle, #identityBadge, .subnav, .export-toolbar,
+    .add-row, .guest-form, .supplier-select-wrap, .mood-subnav, button,
+    input[type=file], .floorplan-hint, #newWeddingBtn, #resetDataBtn { display:none !important; }
+    .main{ width:100%; }
+    .content{ padding:0; }
+    body{ background:#fff; }
+    tr[data-include="0"]{ display:none !important; }
+    a[href]:after{ content:""; }
+  }
+
   @media (max-width:860px){
     .app{ flex-direction:column; }
     .sidebar{ width:100%; padding:18px; border-right:none; border-bottom:1px solid var(--rule);}
@@ -584,6 +612,7 @@
     .cards{ grid-template-columns:repeat(2,1fr); }
     .topbar{ flex-direction:column; align-items:flex-start; gap:12px; padding:18px;}
     .content{ padding:20px; }
+    .export-toolbar{ padding:10px 18px; }
   }
 </style>
 </head>
@@ -637,6 +666,12 @@
     </div>
 
     <nav class="subnav" id="subnav"></nav>
+    <div class="export-toolbar">
+      <span>Esporta questa scheda</span>
+      <button onclick="window.print()">🖶 Stampa / PDF</button>
+      <button onclick="exportCurrentToExcel()">Esporta Excel</button>
+      <button onclick="exportCurrentToCSV()">Esporta CSV</button>
+    </div>
 
     <div class="content" id="content"></div>
   </main>
@@ -1009,6 +1044,7 @@ function selectWedding(i){
   state.guestFilter='';
   state.schedeSupplier=null;
   state.floorplanView='2d';
+  state.timelineExclude = new Set();
   renderAll();
 }
 
@@ -1053,7 +1089,7 @@ function updateWeddingField(field, value){
 function renderSubnav(){
   const nav = document.getElementById('subnav');
   if(state.role==='planner'){
-    const tabs = [['budget','Budget'],['fornitori','Fornitori'],['schede','Timeline & Schede Fornitori'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
+    const tabs = [['budget','Budget'],['fornitori','Fornitori'],['schede','Timeline & Schede Fornitori'],['timelinegenerale','Timeline Generale'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
     nav.innerHTML = tabs.map(([id,label])=>`
       <button class="${state.subtab===id?'active':''}" onclick="setSubtab('${id}')">${label}</button>
     `).join('');
@@ -1150,6 +1186,11 @@ function renderContent(){
 
   if(state.subtab==='accessi'){
     renderAccessLog();
+    return;
+  }
+
+  if(state.subtab==='timelinegenerale'){
+    c.innerHTML = renderTimelineGenerale(w);
     return;
   }
 
@@ -1371,9 +1412,13 @@ function renderSchedeFornitori(w){
 function addFornitore(){
   const cat = document.getElementById('nfCat').value.trim();
   const nome = document.getElementById('nfNome').value.trim();
-  const ref = document.getElementById('nfRef').value.trim();
+  let ref = document.getElementById('nfRef').value.trim();
   const email = document.getElementById('nfEmail').value.trim();
-  if(!cat || !nome || !ref) return;
+  if(!cat || !nome){
+    alert('Per aggiungere un fornitore servono almeno "Categoria" e "Nome fornitore".');
+    return;
+  }
+  if(!ref) ref = nome;
   const w = currentWedding();
   w.fornitori.push({cat, nome, ref, email, contattato:false, prenotato:false, note:'', schedaTecnica:[]});
   w.tasks[ref] = w.tasks[ref] || [];
@@ -2510,6 +2555,94 @@ function renderUnrecognizedScreen(){
   `);
   const sb = document.getElementById('subnav'); if(sb) sb.innerHTML='';
   const sd = document.getElementById('tabList'); if(sd) sd.innerHTML='';
+}
+
+// ============ TIMELINE GENERALE (tutti i fornitori insieme) ============
+function timeSortKey(t){
+  const m = (''+t).trim().match(/^(\d{1,2})[:.](\d{2})$/);
+  if(!m) return -1;
+  return parseInt(m[1])*60 + parseInt(m[2]);
+}
+function renderTimelineGenerale(w){
+  const rows = [];
+  Object.keys(w.tasks||{}).forEach(ref=>{
+    (w.tasks[ref]||[]).forEach((t,idx)=>{
+      rows.push({ref, t: t.t, d: t.d, key: ref+'|'+idx});
+    });
+  });
+  if(!rows.length) return `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessun fornitore. Vai su "Timeline & Schede Fornitori" per aggiungerne.</div>`;
+  if(!state.timelineExclude) state.timelineExclude = new Set();
+  rows.sort((a,b)=> timeSortKey(a.t)-timeSortKey(b.t));
+  return `
+    <div class="criterio-note">
+      Tutti gli orari di tutti i fornitori, in un'unica timeline ordinata. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
+    </div>
+    <table>
+      <thead><tr><th style="width:36px"></th><th>Orario</th><th>Fornitore</th><th>Attività</th></tr></thead>
+      <tbody>
+        ${rows.map(r=>`
+          <tr data-include="${state.timelineExclude.has(r.key)?'0':'1'}">
+            <td><input type="checkbox" ${state.timelineExclude.has(r.key)?'':'checked'} onchange="toggleTimelineRow('${r.key.replace(/'/g,"\\'")}',this.checked)"></td>
+            <td class="inc-label" style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--wine);">${r.t}</td>
+            <td class="inc-label">${r.ref}</td>
+            <td class="inc-label">${r.d}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+function toggleTimelineRow(key, checked){
+  if(!state.timelineExclude) state.timelineExclude = new Set();
+  if(checked) state.timelineExclude.delete(key);
+  else state.timelineExclude.add(key);
+  renderContent();
+}
+
+// ============ ESPORTAZIONE (CSV / Excel) — legge le tabelle visibili nella scheda corrente ============
+function scrapeVisibleTables(){
+  const tables = [...document.querySelectorAll('#content table')];
+  return tables.map(table=>{
+    const rows = [...table.querySelectorAll('tr')].filter(tr=> tr.getAttribute('data-include') !== '0');
+    return rows.map(tr=>
+      [...tr.children].map(cell=>{
+        const inp = cell.querySelector('input,select');
+        if(inp) return inp.type==='checkbox' ? (inp.checked?'Sì':'No') : inp.value;
+        return cell.textContent.trim();
+      })
+    );
+  }).filter(t=>t.length);
+}
+function currentSectionLabel(){
+  const active = document.querySelector('.subnav button.active');
+  return active ? active.textContent.trim().replace(/[^a-zA-Z0-9 ]/g,'').replace(/\s+/g,'_') : 'esportazione';
+}
+function exportCurrentToCSV(){
+  const tables = scrapeVisibleTables();
+  if(!tables.length){ alert('Non ci sono tabelle da esportare in questa scheda.'); return; }
+  let csv = '';
+  tables.forEach((rows,i)=>{
+    if(i>0) csv += '\n';
+    rows.forEach(row=>{
+      csv += row.map(v=>`"${(''+v).replace(/"/g,'""')}"`).join(';') + '\n';
+    });
+  });
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = currentSectionLabel() + '.csv';
+  a.click();
+}
+function exportCurrentToExcel(){
+  if(typeof XLSX === 'undefined'){ alert('Il supporto Excel non è disponibile in questo momento.'); return; }
+  const tables = scrapeVisibleTables();
+  if(!tables.length){ alert('Non ci sono tabelle da esportare in questa scheda.'); return; }
+  const wb = XLSX.utils.book_new();
+  tables.forEach((rows,i)=>{
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Tabella '+(i+1));
+  });
+  XLSX.writeFile(wb, currentSectionLabel() + '.xlsx');
 }
 
 // ============ REGISTRO ACCESSI (solo planner) ============
