@@ -1275,14 +1275,23 @@ function renderContent(){
   }
 
   if(state.subtab==='fornitori'){
+    const macroEsistenti = [...new Set(w.fornitori.map(f=>f.cat))];
+    const microEsistenti = [...new Set(w.fornitori.map(f=>f.nome))];
     const addFornitoreForm = `
       <div class="guest-form">
-        <div><label>Macrocategoria</label><input type="text" id="nfCat" placeholder="es. Location, Foto/Video, Musica"></div>
-        <div><label>Microcategoria / Ruolo</label><input type="text" id="nfNome" placeholder="es. Fotografo, Musica aperitivo, Video maker 1"></div>
+        <div><label>Macrocategoria</label>
+          <input type="text" id="nfCat" list="macrocatList" placeholder="es. Location, Foto/Video, Musica">
+          <datalist id="macrocatList">${macroEsistenti.map(c=>`<option value="${c}">`).join('')}</datalist>
+        </div>
+        <div><label>Microcategoria / Ruolo</label>
+          <input type="text" id="nfNome" list="microcatList" placeholder="es. Fotografo, Musica aperitivo, Video maker 1">
+          <datalist id="microcatList">${microEsistenti.map(m=>`<option value="${m}">`).join('')}</datalist>
+        </div>
         <div><label>Nome persona / azienda</label><input type="text" id="nfRef" placeholder="es. Vanessa Ruggeri"></div>
         <div><label>Email di accesso</label><input type="email" id="nfEmail" placeholder="opzionale"></div>
         <div class="submit-cell"><button class="btn-mini" onclick="addFornitore()">+ Aggiungi fornitore</button></div>
       </div>
+      <div class="floorplan-hint">Mentre scrivi in "Macrocategoria" o "Microcategoria" ti comparirà un suggerimento con quelle già usate in questo matrimonio — sceglilo dalla lista per essere certa di finire nello stesso gruppo, invece di crearne uno nuovo per un refuso (es. "Location" vs "location").</div>
     `;
     if(!w.fornitori.length){ c.innerHTML = addFornitoreForm + `<div class="empty-state">Nessun fornitore ancora registrato per questo matrimonio.</div>`; return; }
     const groups = {};
