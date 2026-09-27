@@ -1342,6 +1342,7 @@ function renderContent(){
     if(!state.pagamentiView) state.pagamentiView = 'elenco';
     const pagamentiNav = `<div class="mood-subnav">
       <button class="${state.pagamentiView==='elenco'?'active':''}" onclick="setPagamentiView('elenco')">Elenco</button>
+      <button class="${state.pagamentiView==='generale'?'active':''}" onclick="setPagamentiView('generale')">Generale (tutti i matrimoni)</button>
       <button class="${state.pagamentiView==='dettaglio'?'active':''}" onclick="setPagamentiView('dettaglio')">Dettaglio scadenze</button>
     </div>`;
 
@@ -1354,6 +1355,53 @@ function renderContent(){
             <tbody>
               ${withMoney.map(row=>`
                 <tr>
+                  <td>${row.catNome}</td>
+                  <td>${row.label}</td>
+                  <td class="num">${fmtEuro(row.v.stimato)}</td>
+                  <td class="num">${fmtEuro(row.v.speso)}</td>
+                  <td class="num">${fmtEuro(row.v.stimato-(row.v.speso||0))}</td>
+                  <td>${row.v.stato ? `<span class="stamp ${row.v.stato}">${row.v.stato}</span>` : `<span class="stamp aperto">aperto</span>`}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+      persistWedding(w);
+      return;
+    }
+
+    if(state.pagamentiView==='generale'){
+      const tutte = [];
+      weddings.forEach(ww=>{
+        ww.categorie.forEach(cat=>{
+          const groups = cat.sottogruppi ? cat.sottogruppi.map(sg=>({sgNome:sg.nome, voci:sg.voci})) : [{sgNome:null, voci:cat.voci}];
+          groups.forEach(g=>{
+            g.voci.forEach(v=>{
+              if(v.stimato>0){
+                tutte.push({matrimonio:ww.names, catNome:cat.nome, label: g.sgNome?`${g.sgNome} — ${v.v}`:v.v, v});
+              }
+            });
+          });
+        });
+      });
+      const totCosto = tutte.reduce((a,r)=>a+r.v.stimato,0);
+      const totVersato = tutte.reduce((a,r)=>a+(r.v.speso||0),0);
+      c.innerHTML = pagamentiNav + `
+        <div class="cards">
+          <div class="card"><div class="label">Matrimoni</div><div class="value">${weddings.length}</div></div>
+          <div class="card"><div class="label">Voci totali</div><div class="value">${tutte.length}</div></div>
+          <div class="card"><div class="label">Costo totale</div><div class="value">${fmtEuro(totCosto)}</div></div>
+          <div class="card ok"><div class="label">Versato totale</div><div class="value">${fmtEuro(totVersato)}</div></div>
+        </div>
+        <div class="cat-block">
+          <div class="cat-title"><h3>Pagamenti di tutti i matrimoni</h3></div>
+          <table>
+            <thead><tr><th>Matrimonio</th><th>Categoria</th><th>Voce</th><th class="num">Costo</th><th class="num">Versato</th><th class="num">Saldo</th><th>Stato</th></tr></thead>
+            <tbody>
+              ${tutte.map(row=>`
+                <tr>
+                  <td>${row.matrimonio}</td>
                   <td>${row.catNome}</td>
                   <td>${row.label}</td>
                   <td class="num">${fmtEuro(row.v.stimato)}</td>
@@ -2748,23 +2796,26 @@ function timeSortKey(t){
 function renderTimelineGenerale(w){
   const rows = [];
   Object.keys(w.tasks||{}).forEach(ref=>{
+    const fornitore = (w.fornitori||[]).find(f=>f.ref===ref);
+    const cat = fornitore ? fornitore.cat : 'Altro';
     (w.tasks[ref]||[]).forEach((t,idx)=>{
-      rows.push({ref, t: t.t, d: t.d, key: ref+'|'+idx});
+      rows.push({ref, cat, t: t.t, d: t.d, key: ref+'|'+idx});
     });
   });
   if(!rows.length) return `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessun fornitore. Vai su "Timeline & Schede Fornitori" per aggiungerne.</div>`;
   if(!state.timelineExclude) state.timelineExclude = new Set();
-  rows.sort((a,b)=> timeSortKey(a.t)-timeSortKey(b.t));
+  rows.sort((a,b)=> a.cat.localeCompare(b.cat, 'it') || timeSortKey(a.t)-timeSortKey(b.t));
   return `
     <div class="criterio-note">
-      Tutti gli orari di tutti i fornitori, in un'unica timeline ordinata. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
+      Tutti gli orari di tutti i fornitori, raggruppati in ordine alfabetico per categoria fornitore e, dentro ogni categoria, in ordine di orario. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
     </div>
     <table>
-      <thead><tr><th style="width:36px"></th><th>Orario</th><th>Fornitore</th><th>Attività</th></tr></thead>
+      <thead><tr><th style="width:36px"></th><th>Categoria</th><th>Orario</th><th>Fornitore</th><th>Attività</th></tr></thead>
       <tbody>
         ${rows.map(r=>`
           <tr data-include="${state.timelineExclude.has(r.key)?'0':'1'}">
             <td><input type="checkbox" ${state.timelineExclude.has(r.key)?'':'checked'} onchange="toggleTimelineRow('${r.key.replace(/'/g,"\\'")}',this.checked)"></td>
+            <td class="inc-label">${r.cat}</td>
             <td class="inc-label" style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--wine);">${r.t}</td>
             <td class="inc-label">${r.ref}</td>
             <td class="inc-label">${r.d}</td>
