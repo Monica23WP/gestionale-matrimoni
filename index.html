@@ -1022,6 +1022,56 @@ function recomputeCategoryTotals(w){
   });
 }
 
+// ============ SCADENZE DI PAGAMENTO ============
+function getVoceByRef(catNome, sgNome, idx){
+  const w = currentWedding();
+  const cat = w.categorie.find(c=>c.nome===catNome);
+  const arr = sgNome ? cat.sottogruppi.find(s=>s.nome===sgNome).voci : cat.voci;
+  return arr[idx];
+}
+function addScadenza(catNome, sgNome, idx){
+  const suffix = catNome.replace(/[^a-zA-Z0-9]/g,'') + '_' + (sgNome?sgNome.replace(/[^a-zA-Z0-9]/g,''):'x') + '_' + idx;
+  const label = document.getElementById('scLabel_'+suffix).value.trim();
+  const data = document.getElementById('scData_'+suffix).value;
+  const importo = parseFloat(document.getElementById('scImporto_'+suffix).value) || 0;
+  if(!label || !data){ alert('Servono almeno etichetta e data per aggiungere una scadenza.'); return; }
+  const v = getVoceByRef(catNome, sgNome, idx);
+  if(!v.scadenze) v.scadenze = [];
+  v.scadenze.push({label, data, importo, pagato:false});
+  persistWedding(currentWedding());
+  renderContent();
+}
+function updateScadenza(catNome, sgNome, idx, sIdx, field, value){
+  const v = getVoceByRef(catNome, sgNome, idx);
+  v.scadenze[sIdx][field] = field==='importo' ? (parseFloat(value)||0) : value;
+  persistWedding(currentWedding());
+  if(field==='pagato') renderContent();
+}
+function removeScadenza(catNome, sgNome, idx, sIdx){
+  const v = getVoceByRef(catNome, sgNome, idx);
+  v.scadenze.splice(sIdx,1);
+  persistWedding(currentWedding());
+  renderContent();
+}
+
+// ============ EMAIL DI PROMEMORIA (apre il client di posta con il testo già pronto) ============
+function sendReminderEmail(catNome, sgNome, idx, sIdx, tipo){
+  const w = currentWedding();
+  const v = getVoceByRef(catNome, sgNome, idx);
+  const s = v.scadenze[sIdx];
+  const to = w.sposiEmail;
+  if(!to){ alert('Per questo matrimonio non è ancora stata impostata l\'email degli sposi (Lista Invitati → Lista Principale).'); return; }
+  const nomeVoce = sgNome ? `${sgNome} — ${v.v}` : v.v;
+  const subject = tipo==='giorno'
+    ? `Pagamento in scadenza oggi — ${w.names}`
+    : `Promemoria pagamento in arrivo — ${w.names}`;
+  const corpo = tipo==='giorno'
+    ? `Ciao,\n\nVi ricordo che oggi, ${s.data}, è in scadenza il pagamento "${nomeVoce} — ${s.label}" di ${fmtEuro(s.importo)}.\n\nGrazie,\nMonica Coppolino\nWedding Planner`
+    : `Ciao,\n\nUn promemoria gentile: il pagamento "${nomeVoce} — ${s.label}" di ${fmtEuro(s.importo)} è in scadenza il ${s.data}.\n\nGrazie,\nMonica Coppolino\nWedding Planner`;
+  const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(corpo)}`;
+  window.open(mailto, '_blank');
+}
+
 function renderSidebar(){
   const list = document.getElementById('tabList');
   const canSwitch = !(FIREBASE_READY && identity && identity.role!=='planner');
@@ -1115,13 +1165,32 @@ function renderContent(){
   if(state.subtab==='budget'){
     const totSpeso = w.categorie.reduce((a,cat)=>a+cat.speso,0);
     const rimanente = w.budgetTotale - totSpeso;
+
+    // Prima passata: individua la voce che, sommata alle precedenti, fa superare il budget stimato
+    let cumulativeConIva = 0, tippingKey = null;
+    w.categorie.forEach(cat=>{
+      const groups = cat.sottogruppi ? cat.sottogruppi.map(sg=>({sgNome:sg.nome, voci:sg.voci})) : [{sgNome:null, voci:cat.voci}];
+      groups.forEach(g=>{
+        g.voci.forEach((v,idx)=>{
+          const conIva = Math.round(v.stimato*1.22*100)/100;
+          const prevCum = cumulativeConIva;
+          cumulativeConIva += conIva;
+          if(tippingKey===null && w.budgetStimato>0 && cumulativeConIva > w.budgetStimato && prevCum <= w.budgetStimato){
+            tippingKey = cat.nome+'|'+(g.sgNome||'')+'|'+idx;
+          }
+        });
+      });
+    });
+
     const voceRow = (v, catNome, sgNome, idx)=>{
       const conIva = Math.round(v.stimato*1.22*100)/100;
       const delta = Math.round((conIva-(v.speso||0))*100)/100;
       const ref = `'${catNome.replace(/'/g,"\\'")}', ${sgNome?`'${sgNome.replace(/'/g,"\\'")}'`:'null'}, ${idx}`;
+      const key = catNome+'|'+(sgNome||'')+'|'+idx;
+      const isTipping = key===tippingKey;
       return `
-        <tr>
-          <td>${v.v}</td>
+        <tr ${isTipping ? 'style="background:rgba(166,62,62,0.12); border-left:3px solid var(--wine);"' : ''}>
+          <td>${v.v}${isTipping ? ' <span class="stamp aperto" style="margin-left:6px;">supera il budget stimato</span>' : ''}</td>
           <td class="num"><input type="number" step="1" value="${v.q!==undefined?v.q:0}" onchange="updateVoceField(${ref},'q',this.value)" style="width:56px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
           <td class="num"><input type="number" step="0.01" value="${v.prezzo!==undefined?v.prezzo:0}" onchange="updateVoceField(${ref},'prezzo',this.value)" style="width:72px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
           <td class="num">22%</td>
@@ -1148,7 +1217,7 @@ function renderContent(){
         <div class="card ok"><div class="label">Speso finora</div><div class="value">${fmtEuro(totSpeso)}</div></div>
         <div class="card ${rimanente<3000?'warn':''}"><div class="label">Residuo disponibile</div><div class="value">${fmtEuro(rimanente)}</div></div>
       </div>
-      <div class="criterio-note">IVA calcolata al 22% su ogni voce. "Totale con IVA" = stimato netto × 1,22 (calcolato in automatico da quantità × prezzo unitario). "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale con IVA previsto). Clicca su quantità, prezzo, speso o stato per modificarli.</div>
+      <div class="criterio-note">IVA calcolata al 22% su ogni voce. "Totale con IVA" = stimato netto × 1,22 (calcolato in automatico da quantità × prezzo unitario). "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale con IVA previsto). Clicca su quantità, prezzo, speso o stato per modificarli. La riga evidenziata in rosso è la voce che, sommata a tutte quelle precedenti, fa superare il budget stimato complessivo.</div>
       ${w.categorie.map(cat=>`
         <div class="cat-block">
           <div class="cat-title">
@@ -1252,29 +1321,101 @@ function renderContent(){
   }
 
   if(state.subtab==='pagamenti'){
-    const flatVoci = (cat)=> cat.sottogruppi
-      ? cat.sottogruppi.flatMap(sg=>sg.voci.map(v=>({...v, v:`${sg.nome} — ${v.v}`})))
-      : cat.voci;
-    const withMoney = w.categorie.flatMap(cat=>flatVoci(cat).filter(v=>v.stimato>0).map(v=>({...v,cat:cat.nome})));
-    c.innerHTML = `
+    const withMoney = [];
+    w.categorie.forEach(cat=>{
+      const groups = cat.sottogruppi ? cat.sottogruppi.map(sg=>({sgNome:sg.nome, voci:sg.voci})) : [{sgNome:null, voci:cat.voci}];
+      groups.forEach(g=>{
+        g.voci.forEach((v,idx)=>{
+          if(v.stimato>0){
+            if(!v.scadenze) v.scadenze = [];
+            withMoney.push({v, catNome:cat.nome, sgNome:g.sgNome, idx, label: g.sgNome?`${g.sgNome} — ${v.v}`:v.v});
+          }
+        });
+      });
+    });
+
+    const oggi = new Date(); oggi.setHours(0,0,0,0);
+    const prossime = [];
+    withMoney.forEach(row=>{
+      (row.v.scadenze||[]).forEach((s,sIdx)=>{
+        if(s.pagato || !s.data) return;
+        const d = new Date(s.data);
+        const diffGiorni = Math.round((d-oggi)/86400000);
+        if(diffGiorni <= 14){
+          prossime.push({...row, scadenza:s, sIdx, diffGiorni});
+        }
+      });
+    });
+    prossime.sort((a,b)=> new Date(a.scadenza.data) - new Date(b.scadenza.data));
+
+    const riepilogo = prossime.length ? `
       <div class="cat-block">
-        <div class="cat-title"><h3>Stato pagamenti per voce</h3></div>
+        <div class="cat-title"><h3>Prossime scadenze (14 giorni) e scadute</h3></div>
         <table>
-          <thead><tr><th>Categoria</th><th>Voce</th><th class="num">Costo</th><th class="num">Versato</th><th class="num">Saldo</th><th>Stato</th></tr></thead>
+          <thead><tr><th>Voce</th><th>Scadenza</th><th class="num">Importo</th><th>Quando</th><th></th></tr></thead>
           <tbody>
-            ${withMoney.map(v=>`
-              <tr>
-                <td>${v.cat}</td>
-                <td>${v.v}</td>
-                <td class="num">${fmtEuro(v.stimato)}</td>
-                <td class="num">${fmtEuro(v.speso)}</td>
-                <td class="num">${fmtEuro(v.stimato-(v.speso||0))}</td>
-                <td>${v.stato ? `<span class="stamp ${v.stato}">${v.stato}</span>` : `<span class="stamp aperto">aperto</span>`}</td>
+            ${prossime.map(p=>`
+              <tr ${p.diffGiorni<0?'style="background:rgba(166,62,62,0.12);"':''}>
+                <td>${p.label} — ${p.scadenza.label}</td>
+                <td>${p.scadenza.data}</td>
+                <td class="num">${fmtEuro(p.scadenza.importo)}</td>
+                <td>${p.diffGiorni<0 ? `<span class="stamp aperto">scaduta da ${Math.abs(p.diffGiorni)}g</span>` : p.diffGiorni===0 ? `<span class="stamp acconto">oggi</span>` : `tra ${p.diffGiorni}g`}</td>
+                <td>
+                  <button class="btn-mini" style="font-size:10.5px; padding:4px 8px;" onclick="sendReminderEmail('${p.catNome.replace(/'/g,"\\'")}',${p.sgNome?`'${p.sgNome.replace(/'/g,"\\'")}'`:'null'},${p.idx},${p.sIdx},'promemoria')">✉ Promemoria</button>
+                  <button class="btn-mini" style="font-size:10.5px; padding:4px 8px;" onclick="sendReminderEmail('${p.catNome.replace(/'/g,"\\'")}',${p.sgNome?`'${p.sgNome.replace(/'/g,"\\'")}'`:'null'},${p.idx},${p.sIdx},'giorno')">✉ Del giorno</button>
+                </td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       </div>
+    ` : '';
+
+    c.innerHTML = riepilogo + `
+      <div class="cat-block">
+        <div class="cat-title"><h3>Stato pagamenti per voce</h3></div>
+      </div>
+      ${withMoney.map(row=>{
+        const v = row.v;
+        const ref = `'${row.catNome.replace(/'/g,"\\'")}', ${row.sgNome?`'${row.sgNome.replace(/'/g,"\\'")}'`:'null'}, ${row.idx}`;
+        return `
+        <div class="fornitore-card" style="margin-bottom:14px;">
+          <h2 style="font-size:16px;">${row.label}</h2>
+          <div class="fornitore-meta" style="margin-top:8px;">
+            <div><div class="k">Costo</div><div class="v">${fmtEuro(v.stimato)}</div></div>
+            <div><div class="k">Versato</div><div class="v">${fmtEuro(v.speso)}</div></div>
+            <div><div class="k">Saldo</div><div class="v">${fmtEuro(v.stimato-(v.speso||0))}</div></div>
+            <div><div class="k">Stato</div><div class="v">${v.stato ? `<span class="stamp ${v.stato}">${v.stato}</span>` : `<span class="stamp aperto">aperto</span>`}</div></div>
+          </div>
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:10px 0 4px;">Scadenze di pagamento</div>
+          ${v.scadenze && v.scadenze.length ? `
+          <table>
+            <thead><tr><th>Etichetta</th><th>Data scadenza</th><th class="num">Importo</th><th>Pagato</th><th></th></tr></thead>
+            <tbody>
+              ${v.scadenze.map((s,sIdx)=>`
+                <tr>
+                  <td><input type="text" value="${s.label}" onchange="updateScadenza(${ref},${sIdx},'label',this.value)" style="width:100%; border:none; background:none; font-size:12.5px;"></td>
+                  <td><input type="date" value="${s.data}" onchange="updateScadenza(${ref},${sIdx},'data',this.value)" style="font-size:12px; border:1px solid var(--rule); border-radius:5px; padding:3px 5px;"></td>
+                  <td class="num"><input type="number" step="0.01" value="${s.importo}" onchange="updateScadenza(${ref},${sIdx},'importo',this.value)" style="width:80px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
+                  <td><input type="checkbox" ${s.pagato?'checked':''} onchange="updateScadenza(${ref},${sIdx},'pagato',this.checked)"></td>
+                  <td>
+                    <button class="btn-mini" style="font-size:10px; padding:3px 6px;" onclick="sendReminderEmail(${ref},${sIdx},'promemoria')">✉ Promemoria</button>
+                    <button class="btn-mini" style="font-size:10px; padding:3px 6px;" onclick="sendReminderEmail(${ref},${sIdx},'giorno')">✉ Del giorno</button>
+                    <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:10px" onclick="removeScadenza(${ref},${sIdx})">rimuovi</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          ` : `<div class="empty-state" style="margin:6px 0;">Nessuna scadenza impostata per questa voce.</div>`}
+          <div class="add-row" style="margin-top:8px;">
+            <input type="text" id="scLabel_${row.catNome.replace(/[^a-zA-Z0-9]/g,'')}_${row.sgNome?row.sgNome.replace(/[^a-zA-Z0-9]/g,''):'x'}_${row.idx}" placeholder="es. Acconto alla firma">
+            <input type="date" id="scData_${row.catNome.replace(/[^a-zA-Z0-9]/g,'')}_${row.sgNome?row.sgNome.replace(/[^a-zA-Z0-9]/g,''):'x'}_${row.idx}">
+            <input type="number" step="0.01" id="scImporto_${row.catNome.replace(/[^a-zA-Z0-9]/g,'')}_${row.sgNome?row.sgNome.replace(/[^a-zA-Z0-9]/g,''):'x'}_${row.idx}" placeholder="Importo" style="width:100px;">
+            <button onclick="addScadenza(${ref})">+ Aggiungi scadenza</button>
+          </div>
+        </div>
+      `}).join('')}
     `;
   }
   persistWedding(w);
