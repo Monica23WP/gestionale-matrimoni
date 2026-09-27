@@ -595,6 +595,7 @@
   tr[data-include="0"] .inc-label{ text-decoration:line-through; color:var(--ink-soft); opacity:0.55; }
 
   @media print{
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
     .sidebar, .topbar .role-toggle, #identityBadge, .subnav, .export-toolbar,
     .add-row, .guest-form, .supplier-select-wrap, .mood-subnav, button,
     input[type=file], .floorplan-hint, #newWeddingBtn, #resetDataBtn { display:none !important; }
@@ -603,6 +604,9 @@
     body{ background:#fff; }
     tr[data-include="0"]{ display:none !important; }
     a[href]:after{ content:""; }
+    .cat-block, .fornitore-card, table{ break-inside:avoid; }
+    .cat-title{ break-after:avoid; }
+    input, select{ border:none !important; background:none !important; -webkit-appearance:none; appearance:none; }
   }
 
   @media (max-width:860px){
@@ -1095,6 +1099,7 @@ function selectWedding(i){
   state.schedeSupplier=null;
   state.floorplanView='2d';
   state.timelineExclude = new Set();
+  state.pagamentiView = 'elenco';
   renderAll();
 }
 
@@ -1334,6 +1339,38 @@ function renderContent(){
       });
     });
 
+    if(!state.pagamentiView) state.pagamentiView = 'elenco';
+    const pagamentiNav = `<div class="mood-subnav">
+      <button class="${state.pagamentiView==='elenco'?'active':''}" onclick="setPagamentiView('elenco')">Elenco</button>
+      <button class="${state.pagamentiView==='dettaglio'?'active':''}" onclick="setPagamentiView('dettaglio')">Dettaglio scadenze</button>
+    </div>`;
+
+    if(state.pagamentiView==='elenco'){
+      c.innerHTML = pagamentiNav + `
+        <div class="cat-block">
+          <div class="cat-title"><h3>Stato pagamenti per voce</h3></div>
+          <table>
+            <thead><tr><th>Categoria</th><th>Voce</th><th class="num">Costo</th><th class="num">Versato</th><th class="num">Saldo</th><th>Stato</th></tr></thead>
+            <tbody>
+              ${withMoney.map(row=>`
+                <tr>
+                  <td>${row.catNome}</td>
+                  <td>${row.label}</td>
+                  <td class="num">${fmtEuro(row.v.stimato)}</td>
+                  <td class="num">${fmtEuro(row.v.speso)}</td>
+                  <td class="num">${fmtEuro(row.v.stimato-(row.v.speso||0))}</td>
+                  <td>${row.v.stato ? `<span class="stamp ${row.v.stato}">${row.v.stato}</span>` : `<span class="stamp aperto">aperto</span>`}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+      persistWedding(w);
+      return;
+    }
+
+    // ---- Vista Dettaglio scadenze ----
     const oggi = new Date(); oggi.setHours(0,0,0,0);
     const prossime = [];
     withMoney.forEach(row=>{
@@ -1371,9 +1408,9 @@ function renderContent(){
       </div>
     ` : '';
 
-    c.innerHTML = riepilogo + `
+    c.innerHTML = pagamentiNav + riepilogo + `
       <div class="cat-block">
-        <div class="cat-title"><h3>Stato pagamenti per voce</h3></div>
+        <div class="cat-title"><h3>Scadenze per voce</h3></div>
       </div>
       ${withMoney.map(row=>{
         const v = row.v;
@@ -1419,6 +1456,10 @@ function renderContent(){
     `;
   }
   persistWedding(w);
+}
+function setPagamentiView(v){
+  state.pagamentiView = v;
+  renderContent();
 }
 
 function renderFornitoreView(w){
@@ -2774,16 +2815,48 @@ function exportCurrentToCSV(){
   a.download = currentSectionLabel() + '.csv';
   a.click();
 }
+function parseItalianNumber(str){
+  const s = (''+str).trim();
+  if(!/^-?[\d.]*\d,\d{2}\s?€?$/.test(s)) return null;
+  const clean = s.replace(/€/g,'').trim().replace(/\./g,'').replace(',', '.');
+  const n = parseFloat(clean);
+  return isNaN(n) ? null : n;
+}
 function exportCurrentToExcel(){
   if(typeof XLSX === 'undefined'){ alert('Il supporto Excel non è disponibile in questo momento.'); return; }
   const tables = scrapeVisibleTables();
   if(!tables.length){ alert('Non ci sono tabelle da esportare in questa scheda.'); return; }
   const wb = XLSX.utils.book_new();
   tables.forEach((rows,i)=>{
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, 'Tabella '+(i+1));
+    const converted = rows.map((row,rIdx)=> row.map(cell=>{
+      if(rIdx===0) return cell; // l'intestazione resta testo
+      const n = parseItalianNumber(cell);
+      return n===null ? cell : n;
+    }));
+    const ws = XLSX.utils.aoa_to_sheet(converted);
+    // larghezza colonne adattata al contenuto più lungo
+    ws['!cols'] = converted[0].map((_,colIdx)=>{
+      const maxLen = Math.max(...converted.map(r=> (''+(r[colIdx]??'')).length));
+      return { wch: Math.min(Math.max(maxLen+2, 10), 45) };
+    });
+    // formato "valuta" sui numeri + tentativo di intestazione in grassetto con sfondo brand
+    // (nota: alcuni visualizzatori Excel potrebbero non mostrare colori/grassetto — limite della libreria gratuita)
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for(let R=range.s.r; R<=range.e.r; R++){
+      for(let C=range.s.c; C<=range.e.c; C++){
+        const addr = XLSX.utils.encode_cell({r:R,c:C});
+        const cell = ws[addr];
+        if(!cell) continue;
+        if(R===0){
+          cell.s = { font:{ bold:true, color:{rgb:'FFFFFF'} }, fill:{ fgColor:{ rgb:'2D337A' } }, alignment:{horizontal:'center'} };
+        } else if(cell.t==='n'){
+          cell.z = '#,##0.00 "€"';
+        }
+      }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, ('Tabella '+(i+1)).slice(0,31));
   });
-  XLSX.writeFile(wb, currentSectionLabel() + '.xlsx');
+  XLSX.writeFile(wb, currentSectionLabel() + '.xlsx', {cellStyles:true});
 }
 
 // ============ REGISTRO ACCESSI (solo planner) ============
