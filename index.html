@@ -2668,7 +2668,7 @@ function renderAll(){
 }
 
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
-const PERSIST_FIELDS = ['categorie','fornitori','guests','moodboard','tasks','rsvpChannel','sposiEmail','emergencyContacts'];
+const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','guests','moodboard','tasks','rsvpChannel','sposiEmail','emergencyContacts'];
 
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
@@ -2698,6 +2698,7 @@ if(FIREBASE_READY){
     currentUser = user;
     accessLogged = false;
     if(user){
+      await loadAllWeddings();
       identity = resolveIdentity(user.email);
       if(!identity){
         document.getElementById('loadingOverlay') && (document.getElementById('loadingOverlay').style.display='none');
@@ -2714,6 +2715,40 @@ if(FIREBASE_READY){
     renderAll();
     renderSidebarFoot();
   });
+}
+
+// Carica dal database TUTTI i matrimoni esistenti (non solo quelli di partenza),
+// così un nuovo matrimonio creato resta disponibile anche dopo aver ricaricato la pagina.
+async function loadAllWeddings(){
+  if(FIREBASE_READY){
+    try{
+      const snap = await db.collection('weddings').get();
+      const foundIds = [];
+      snap.forEach(doc=>{
+        foundIds.push(doc.id);
+        let w = weddings.find(x=>x.id===doc.id);
+        if(!w){
+          w = {
+            id: doc.id, names:'(senza nome)', date:'', location:'', chiesa:'',
+            budgetTotale:0, budgetStimato:0, imprevisti:0,
+            categorie:[], fornitori:[], guests:[],
+            moodboard:{ palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} },
+            tasks:{}, rsvpChannel:{tipo:'', valore:''}, sposiEmail:'',
+            emergencyContacts:[{label:'',numero:''},{label:'',numero:''}]
+          };
+          weddings.push(w);
+        }
+        const data = doc.data();
+        PERSIST_FIELDS.forEach(k=>{ if(data[k]!==undefined) w[k] = data[k]; });
+      });
+      // i matrimoni di partenza che non hanno ancora un documento proprio su Firestore: li creiamo ora
+      for(const w of weddings){
+        if(!foundIds.includes(w.id)) await persistWedding(w);
+      }
+    }catch(e){ console.error('Errore caricamento elenco matrimoni', e); }
+  } else if(HAS_STORAGE){
+    for(const w of weddings){ await loadWedding(w); }
+  }
 }
 
 function resolveIdentity(email){
@@ -3063,15 +3098,15 @@ async function renderAccessLog(){
 }
 
 async function initApp(){
-  for(const w of weddings){ await loadWedding(w); }
   if(!FIREBASE_READY){
+    await loadAllWeddings(); // usa window.storage, non richiede login
     renderAll();
     renderSidebarFoot();
     if(!HAS_STORAGE){ setSaveStatus('Salvataggio non disponibile in questa modalità', 'var(--ink-soft)'); }
     const overlay = document.getElementById('loadingOverlay');
     if(overlay) overlay.style.display = 'none';
   }
-  // Se FIREBASE_READY, ci pensa onAuthStateChanged a mostrare login o app
+  // Se FIREBASE_READY, il caricamento avviene dentro onAuthStateChanged (le regole richiedono un utente autenticato)
 }
 
 initApp();
