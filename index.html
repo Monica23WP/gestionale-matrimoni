@@ -921,7 +921,11 @@ const weddings = [
 weddings.forEach(w=>{
   if(!w.rsvpChannel) w.rsvpChannel = {tipo:'', valore:''};
   if(w.sposiEmail===undefined) w.sposiEmail = '';
-  (w.fornitori||[]).forEach(f=>{ if(f.email===undefined) f.email=''; });
+  if(!w.emergencyContacts) w.emergencyContacts = [{label:'', numero:''},{label:'', numero:''}];
+  (w.fornitori||[]).forEach(f=>{
+    if(f.email===undefined) f.email='';
+    if(!f.telefoni) f.telefoni = [];
+  });
   (w.guests||[]).forEach(g=>{
     if(g.rsvp===undefined) g.rsvp = 'in attesa';
     if(!g.transferAH) g.transferAH = {data:'', ora:''};
@@ -1100,6 +1104,7 @@ function selectWedding(i){
   state.floorplanView='2d';
   state.timelineExclude = new Set();
   state.pagamentiView = 'elenco';
+  state.elencoTimelineSelected = null;
   renderAll();
 }
 
@@ -1144,7 +1149,7 @@ function updateWeddingField(field, value){
 function renderSubnav(){
   const nav = document.getElementById('subnav');
   if(state.role==='planner'){
-    const tabs = [['budget','Budget'],['fornitori','Fornitori'],['schede','Timeline & Schede Fornitori'],['timelinegenerale','Timeline Generale'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
+    const tabs = [['budget','Budget'],['fornitori','Fornitori'],['schede','Timeline & Schede Fornitori'],['timelinegenerale','Timeline Generale'],['elencotimeline','Elenco Timeline'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
     nav.innerHTML = tabs.map(([id,label])=>`
       <button class="${state.subtab===id?'active':''}" onclick="setSubtab('${id}')">${label}</button>
     `).join('');
@@ -1265,6 +1270,11 @@ function renderContent(){
 
   if(state.subtab==='timelinegenerale'){
     c.innerHTML = renderTimelineGenerale(w);
+    return;
+  }
+
+  if(state.subtab==='elencotimeline'){
+    c.innerHTML = renderElencoTimeline(w);
     return;
   }
 
@@ -1539,7 +1549,7 @@ function renderFornitoreView(w){
   const f = w.fornitori.find(x=>x.ref===state.supplierRef);
   const tasks = w.tasks[state.supplierRef] || [];
 
-  return selectHtml + `
+  return selectHtml + renderEmergencyBlock(w, false) + `
     <div class="fornitore-card">
       <h2>${f.ref}</h2>
       <div class="cat">${f.cat} · ${f.nome}</div>
@@ -1563,6 +1573,46 @@ function setSupplier(name){ state.supplierRef = name; renderContent(); }
 
 // ============ TIMELINE & SCHEDE TECNICHE FORNITORI ============
 function setSchedeSupplier(ref){ state.schedeSupplier = ref; renderContent(); }
+
+function renderElencoTimeline(w){
+  const refs = Object.keys(w.tasks||{}).filter(ref => (w.tasks[ref]||[]).length>0).sort((a,b)=>a.localeCompare(b,'it'));
+  if(!refs.length) return `<div class="empty-state">Ancora nessuna timeline creata. Man mano che aggiungi orari a un fornitore in "Timeline & Schede Fornitori", il suo nome comparirà qui.</div>`;
+  if(!state.elencoTimelineSelected || !refs.includes(state.elencoTimelineSelected)) state.elencoTimelineSelected = refs[0];
+  const sel = state.elencoTimelineSelected;
+  const fornitore = (w.fornitori||[]).find(f=>f.ref===sel);
+  const tasks = w.tasks[sel] || [];
+  return `
+    <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="min-width:220px;">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px;">Fornitori con timeline</div>
+        ${refs.map(ref=>{
+          const f = (w.fornitori||[]).find(x=>x.ref===ref);
+          return `
+          <div onclick="selectElencoTimeline('${ref.replace(/'/g,"\\'")}')" style="cursor:pointer; padding:9px 12px; margin-bottom:6px; border-radius:8px; border:1px solid var(--rule); background:${ref===sel?'var(--ink)':'var(--paper)'}; color:${ref===sel?'var(--white-ish)':'var(--ink)'};">
+            <div style="font-weight:600; font-size:13px;">${ref}</div>
+            ${f ? `<div style="font-size:10.5px; opacity:0.8;">${f.nome}</div>` : ''}
+          </div>
+        `}).join('')}
+      </div>
+      <div style="flex:1; min-width:280px;">
+        <div class="fornitore-card">
+          <h2>${sel}</h2>
+          ${fornitore ? `<div class="cat">${fornitore.cat} · ${fornitore.nome}</div>` : ''}
+          ${tasks.map(t=>`
+            <div class="task-row">
+              <div class="task-time">${t.t}</div>
+              <div class="task-text">${t.d}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+function selectElencoTimeline(ref){
+  state.elencoTimelineSelected = ref;
+  renderContent();
+}
 
 function renderSchedeFornitori(w){
   if(!w.fornitori.length) return `<div class="empty-state">Nessun fornitore ancora registrato per questo matrimonio.</div>`;
@@ -1590,6 +1640,21 @@ function renderSchedeFornitori(w){
         <b>Email di accesso:</b> questa è l'email con cui il fornitore effettuerà il login sul sito (deve corrispondere a un utente creato in Firebase Authentication).
         <div style="margin-top:8px;">
           <input type="email" value="${f.email||''}" placeholder="es. lamimosa@fiori.it" onchange="updateFornitoreField('${f.ref}','email',this.value)" style="width:100%; max-width:320px; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--white-ish);">
+        </div>
+      </div>
+      <div class="criterio-note" style="margin-bottom:16px;">
+        <b>Numeri di cellulare</b>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+          ${(f.telefoni||[]).map((tel,tIdx)=>`
+            <span style="display:inline-flex; align-items:center; gap:6px; background:var(--paper); border:1px solid var(--rule); border-radius:20px; padding:5px 6px 5px 12px; font-family:'IBM Plex Mono',monospace; font-size:12.5px;">
+              ${tel}
+              <button onclick="removeFornitoreTelefono('${f.ref.replace(/'/g,"\\'")}',${tIdx})" style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:13px; line-height:1;">×</button>
+            </span>
+          `).join('')}
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="tel" id="newTelefonoFornitore" placeholder="es. 333 1234567" style="padding:6px 9px; border:1px solid var(--rule); border-radius:6px; width:180px;">
+          <button class="btn-mini" onclick="addFornitoreTelefono('${f.ref.replace(/'/g,"\\'")}')">+ Aggiungi numero</button>
         </div>
       </div>
       <div class="fornitore-meta">
@@ -1645,7 +1710,7 @@ function renderSchedeFornitori(w){
     </div>
   `;
 
-  return selectHtml + schedaHtml;
+  return selectHtml + renderEmergencyBlock(w, false) + schedaHtml;
 }
 
 function addFornitore(){
@@ -1685,6 +1750,24 @@ function updateFornitoreField(ref, field, value){
   const f = currentWedding().fornitori.find(x=>x.ref===ref);
   f[field] = value;
   persistWedding(currentWedding());
+}
+function addFornitoreTelefono(ref){
+  const input = document.getElementById('newTelefonoFornitore');
+  const tel = input.value.trim();
+  if(!tel) return;
+  const w = currentWedding();
+  const f = w.fornitori.find(x=>x.ref===ref);
+  if(!f.telefoni) f.telefoni = [];
+  f.telefoni.push(tel);
+  persistWedding(w);
+  renderContent();
+}
+function removeFornitoreTelefono(ref, idx){
+  const w = currentWedding();
+  const f = w.fornitori.find(x=>x.ref===ref);
+  f.telefoni.splice(idx,1);
+  persistWedding(w);
+  renderContent();
 }
 function addSchedaCampo(ref){
   const campo = document.getElementById('newCampoNome').value.trim();
@@ -2585,7 +2668,7 @@ function renderAll(){
 }
 
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
-const PERSIST_FIELDS = ['categorie','fornitori','guests','moodboard','tasks','rsvpChannel','sposiEmail'];
+const PERSIST_FIELDS = ['categorie','fornitori','guests','moodboard','tasks','rsvpChannel','sposiEmail','emergencyContacts'];
 
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
@@ -2802,6 +2885,38 @@ function timeSortKey(t){
   if(!m) return -1;
   return parseInt(m[1])*60 + parseInt(m[2]);
 }
+function renderEmergencyBlock(w, editable){
+  const ec = w.emergencyContacts || [{label:'',numero:''},{label:'',numero:''}];
+  if(editable){
+    return `
+      <div class="criterio-note">
+        <b>Numeri di riferimento per l'evento</b> — visibili a tutti i fornitori, da usare in caso di imprevisti.
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:8px;">
+          ${ec.map((c,i)=>`
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="text" value="${c.label}" placeholder="es. Monica (Wedding Planner)" onchange="updateEmergencyContact(${i},'label',this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; min-width:180px;">
+              <input type="text" value="${c.numero}" placeholder="numero di telefono" onchange="updateEmergencyContact(${i},'numero',this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; width:150px;">
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  const valorizzati = ec.filter(c=>c.numero);
+  if(!valorizzati.length) return '';
+  return `
+    <div class="criterio-note">
+      <b>Numeri di riferimento per l'evento (imprevisti):</b>
+      ${valorizzati.map(c=>` ${c.label?c.label+': ':''}<span style="font-family:'IBM Plex Mono',monospace; color:var(--wine); font-weight:600;">${c.numero}</span>`).join(' &nbsp;·&nbsp; ')}
+    </div>
+  `;
+}
+function updateEmergencyContact(i, field, value){
+  const w = currentWedding();
+  w.emergencyContacts[i][field] = value;
+  persistWedding(w);
+}
+
 function renderTimelineGenerale(w){
   const rows = [];
   Object.keys(w.tasks||{}).forEach(ref=>{
@@ -2811,10 +2926,10 @@ function renderTimelineGenerale(w){
       rows.push({ref, cat, t: t.t, d: t.d, key: ref+'|'+idx});
     });
   });
-  if(!rows.length) return `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessun fornitore. Vai su "Timeline & Schede Fornitori" per aggiungerne.</div>`;
+  if(!rows.length) return renderEmergencyBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessun fornitore. Vai su "Timeline & Schede Fornitori" per aggiungerne.</div>`;
   if(!state.timelineExclude) state.timelineExclude = new Set();
   rows.sort((a,b)=> a.cat.localeCompare(b.cat, 'it') || timeSortKey(a.t)-timeSortKey(b.t));
-  return `
+  return renderEmergencyBlock(w, true) + `
     <div class="criterio-note">
       Tutti gli orari di tutti i fornitori, raggruppati in ordine alfabetico per categoria fornitore e, dentro ogni categoria, in ordine di orario. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
     </div>
