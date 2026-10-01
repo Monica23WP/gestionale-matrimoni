@@ -1008,6 +1008,28 @@ function removeCategoria(catNome){
   persistWedding(w);
   renderContent();
 }
+function renameCategoria(oldNome, newNome){
+  newNome = newNome.trim();
+  if(!newNome || newNome===oldNome) { renderContent(); return; }
+  const w = currentWedding();
+  const cat = w.categorie.find(c=>c.nome===oldNome);
+  if(!cat) return;
+  cat.nome = newNome.toUpperCase();
+  persistWedding(w);
+  renderContent();
+}
+function renameSottogruppo(catNome, oldNome, newNome){
+  newNome = newNome.trim();
+  if(!newNome || newNome===oldNome) { renderContent(); return; }
+  const w = currentWedding();
+  const cat = w.categorie.find(c=>c.nome===catNome);
+  if(!cat || !cat.sottogruppi) return;
+  const sg = cat.sottogruppi.find(s=>s.nome===oldNome);
+  if(!sg) return;
+  sg.nome = newNome;
+  persistWedding(w);
+  renderContent();
+}
 function removeVoce(catNome, sgNome, idx){
   const w = currentWedding();
   const cat = w.categorie.find(c=>c.nome===catNome);
@@ -1025,7 +1047,9 @@ function updateVoceField(catNome, sgNome, idx, field, value){
   const cat = w.categorie.find(c=>c.nome===catNome);
   const arr = sgNome ? cat.sottogruppi.find(s=>s.nome===sgNome).voci : cat.voci;
   const v = arr[idx];
-  if(field==='q'){
+  if(field==='v'){
+    v.v = value;
+  } else if(field==='q'){
     v.q = parseFloat(value)||0;
     v.stimato = Math.round((v.q * (v.prezzo||0))*100)/100;
   } else if(field==='prezzo'){
@@ -1259,7 +1283,7 @@ function renderContent(){
       }
       return `
         <tr ${isTipping ? 'style="background:rgba(166,62,62,0.12); border-left:3px solid var(--wine);"' : ''}>
-          <td>${v.v}${isTipping ? ' <span class="stamp aperto" style="margin-left:6px;">supera il budget stimato</span>' : ''}</td>
+          <td><input type="text" value="${v.v.replace(/"/g,'&quot;')}" onchange="updateVoceField(${ref},'v',this.value)" style="width:100%; min-width:140px; border:1px solid var(--rule); border-radius:5px; padding:4px 6px; font-size:13px; background:var(--white-ish);">${isTipping ? ' <span class="stamp aperto" style="margin-left:6px;">supera il budget stimato</span>' : ''}</td>
           <td class="num"><input type="number" step="1" value="${v.q!==undefined?v.q:0}" onchange="updateVoceField(${ref},'q',this.value)" style="width:56px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
           <td class="num"><input type="number" step="0.01" value="${v.prezzo!==undefined?v.prezzo:0}" onchange="updateVoceField(${ref},'prezzo',this.value)" style="width:72px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
           <td class="num">22%</td>
@@ -1291,12 +1315,12 @@ function renderContent(){
       ${w.categorie.map(cat=>`
         <div class="cat-block">
           <div class="cat-title">
-            <h3>${cat.nome}</h3>
+            ${isPlannerView ? `<input type="text" value="${cat.nome.replace(/"/g,'&quot;')}" onchange="renameCategoria('${cat.nome.replace(/'/g,"\\'")}',this.value)" style="font-family:'Arcon',sans-serif; font-weight:600; font-size:16px; color:var(--ink); border:1px solid transparent; border-radius:6px; padding:2px 4px; background:transparent;" onfocus="this.style.borderColor='var(--rule)'" onblur="this.style.borderColor='transparent'">` : `<h3>${cat.nome}</h3>`}
             <span class="cat-sums">${fmtEuro(cat.speso)} / ${fmtEuro(cat.stimato)}${isPlannerView ? ` <button onclick="removeCategoria('${cat.nome.replace(/'/g,"\\'")}')" style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px; margin-left:8px;" title="Elimina categoria">elimina categoria</button>` : ''}</span>
           </div>
           ${cat.sottogruppi ? cat.sottogruppi.map(sg=>`
             <div style="margin:6px 0 14px 0;">
-              <div style="font-family:'Arcon',sans-serif; font-weight:600; font-size:13.5px; color:var(--ink-soft); margin-bottom:4px; padding-left:2px;">${sg.nome}</div>
+              ${isPlannerView ? `<input type="text" value="${sg.nome.replace(/"/g,'&quot;')}" onchange="renameSottogruppo('${cat.nome.replace(/'/g,"\\'")}','${sg.nome.replace(/'/g,"\\'")}',this.value)" style="font-family:'Arcon',sans-serif; font-weight:600; font-size:13.5px; color:var(--ink-soft); margin-bottom:4px; padding:2px 4px; border:1px solid transparent; border-radius:5px; background:transparent;" onfocus="this.style.borderColor='var(--rule)'" onblur="this.style.borderColor='transparent'">` : `<div style="font-family:'Arcon',sans-serif; font-weight:600; font-size:13.5px; color:var(--ink-soft); margin-bottom:4px; padding-left:2px;">${sg.nome}</div>`}
               <div style="overflow-x:auto;">
               <table style="min-width:920px;">
                 <thead>${voceHead}</thead>
