@@ -970,7 +970,8 @@ function createNewWedding(){
     budgetTotale:0, budgetStimato:0, imprevisti:0,
     categorie:[], fornitori:[], guests:[],
     moodboard:{ palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} },
-    tasks:{}, rsvpChannel:{tipo:'', valore:''}, sposiEmail:''
+    tasks:{}, rsvpChannel:{tipo:'', valore:''}, sposiEmail:'', sposiCanSeeDesign:false,
+    emergencyContacts:[{label:'',numero:''},{label:'',numero:''}]
   };
   weddings.push(nuovo);
   state.weddingIndex = weddings.length-1;
@@ -2771,6 +2772,7 @@ let fbApp=null, db=null, auth=null, currentUser=null, identity=null, accessLogge
 if(FIREBASE_READY){
   fbApp = firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
+  db.settings({ ignoreUndefinedProperties: true });
   auth = firebase.auth();
   auth.onAuthStateChanged(async user=>{
     currentUser = user;
