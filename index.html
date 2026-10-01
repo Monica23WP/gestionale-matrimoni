@@ -641,8 +641,7 @@
     <div class="tab-list" id="tabList"></div>
     <button id="newWeddingBtn" class="tab-new" onclick="createNewWedding()">+ Nuovo matrimonio</button>
     <div class="sidebar-foot">
-      Prototipo — vista planner mostra tutti i matrimoni in gestione.<br>La vista fornitore è limitata a un singolo matrimonio e alla propria scheda.
-      <div id="saveStatus" style="margin-top:10px; font-size:10.5px; color:var(--sage);">● Dati salvati</div>
+      <div id="saveStatus" style="margin-top:0; font-size:10.5px; color:var(--sage);">● Dati salvati</div>
       <div id="authStatus" style="margin-top:6px; font-size:10.5px; color:var(--ink-soft);"></div>
       <button id="resetDataBtn" onclick="resetAllData()" style="margin-top:8px; font-size:10.5px; color:var(--wine); background:none; border:1px dashed var(--wine); border-radius:6px; padding:5px 8px; cursor:pointer;">Reimposta ai dati di partenza</button>
     </div>
@@ -921,6 +920,7 @@ const weddings = [
 weddings.forEach(w=>{
   if(!w.rsvpChannel) w.rsvpChannel = {tipo:'', valore:''};
   if(w.sposiEmail===undefined) w.sposiEmail = '';
+  if(w.sposiCanSeeDesign===undefined) w.sposiCanSeeDesign = false;
   if(!w.emergencyContacts) w.emergencyContacts = [{label:'', numero:''},{label:'', numero:''}];
   (w.fornitori||[]).forEach(f=>{
     if(f.email===undefined) f.email='';
@@ -1085,12 +1085,31 @@ function renderSidebar(){
   const canSwitch = !(FIREBASE_READY && identity && identity.role!=='planner');
   const visible = canSwitch ? weddings.map((w,i)=>({w,i})) : [{w:weddings[state.weddingIndex], i:state.weddingIndex}];
   list.innerHTML = visible.map(({w,i})=>`
-    <div class="tab ${i===state.weddingIndex?'active':''}" ${canSwitch?`onclick="selectWedding(${i})"`:''} style="${canSwitch?'':'cursor:default;'}">
-      <span class="num">0${i+1}</span>
-      <span class="names">${w.names}</span>
-      <span class="date">${w.date} · ${w.location}</span>
+    <div class="tab ${i===state.weddingIndex?'active':''}" style="${canSwitch?'':'cursor:default;'} position:relative;">
+      <div ${canSwitch?`onclick="selectWedding(${i})"`:''}>
+        <span class="num">0${i+1}</span>
+        <span class="names">${w.names}</span>
+        <span class="date">${w.date} · ${w.location}</span>
+      </div>
+      ${canSwitch ? `<button onclick="event.stopPropagation(); deleteWedding('${w.id.replace(/'/g,"\\'")}')" title="Elimina questo matrimonio" style="position:absolute; top:6px; right:8px; border:none; background:none; color:var(--wine); cursor:pointer; font-size:13px; line-height:1;">×</button>` : ''}
     </div>
   `).join('');
+}
+
+async function deleteWedding(id){
+  if(weddings.length<=1){ alert('Deve restare almeno un matrimonio in gestione.'); return; }
+  const w = weddings.find(x=>x.id===id);
+  if(!confirm(`Eliminare definitivamente "${w?w.names:id}" e tutti i suoi dati (budget, fornitori, ospiti, timeline)? Questa operazione non si può annullare.`)) return;
+  const idx = weddings.findIndex(x=>x.id===id);
+  if(idx===-1) return;
+  weddings.splice(idx,1);
+  if(FIREBASE_READY){
+    try{ await db.collection('weddings').doc(id).delete(); }catch(e){ console.error(e); }
+  } else if(HAS_STORAGE){
+    try{ await window.storage.delete('wedding:'+id, true); }catch(e){}
+  }
+  if(state.weddingIndex>=weddings.length) state.weddingIndex = weddings.length-1;
+  renderAll();
 }
 
 function selectWedding(i){
@@ -1154,7 +1173,12 @@ function renderSubnav(){
       <button class="${state.subtab===id?'active':''}" onclick="setSubtab('${id}')">${label}</button>
     `).join('');
   } else if(state.role==='sposi'){
-    nav.innerHTML = `<button class="active">Lista Invitati</button>`;
+    const w = currentWedding();
+    const sposiTabs = [['ospiti','Lista Invitati'],['budget','Budget']];
+    if(w.sposiCanSeeDesign) sposiTabs.push(['moodboard','Grafica & Moodboard']);
+    nav.innerHTML = sposiTabs.map(([id,label])=>`
+      <button class="${state.subtab===id?'active':''}" onclick="setSubtab('${id}')">${label}</button>
+    `).join('');
   } else {
     nav.innerHTML = `<button class="active">La mia scheda</button>`;
   }
@@ -1192,12 +1216,28 @@ function renderContent(){
       });
     });
 
+    const isPlannerView = state.role==='planner';
     const voceRow = (v, catNome, sgNome, idx)=>{
       const conIva = Math.round(v.stimato*1.22*100)/100;
       const delta = Math.round((conIva-(v.speso||0))*100)/100;
       const ref = `'${catNome.replace(/'/g,"\\'")}', ${sgNome?`'${sgNome.replace(/'/g,"\\'")}'`:'null'}, ${idx}`;
       const key = catNome+'|'+(sgNome||'')+'|'+idx;
       const isTipping = key===tippingKey;
+      const statoStamp = v.stato ? `<span class="stamp ${v.stato}">${v.stato}</span>` : '—';
+      if(!isPlannerView){
+        return `
+        <tr ${isTipping ? 'style="background:rgba(166,62,62,0.12); border-left:3px solid var(--wine);"' : ''}>
+          <td>${v.v}${isTipping ? ' <span class="stamp aperto" style="margin-left:6px;">supera il budget stimato</span>' : ''}</td>
+          <td class="num">${v.q!==undefined?v.q:0}</td>
+          <td class="num">${fmtEuro(v.prezzo)}</td>
+          <td class="num">22%</td>
+          <td class="num">${fmtEuro(v.stimato)}</td>
+          <td class="num">${fmtEuro(conIva)}</td>
+          <td class="num">${fmtEuro(v.speso)}</td>
+          <td class="num" style="color:${delta<0?'var(--wine)':'var(--ink)'}">${fmtEuro(delta)}</td>
+          <td>${statoStamp}</td>
+        </tr>`;
+      }
       return `
         <tr ${isTipping ? 'style="background:rgba(166,62,62,0.12); border-left:3px solid var(--wine);"' : ''}>
           <td>${v.v}${isTipping ? ' <span class="stamp aperto" style="margin-left:6px;">supera il budget stimato</span>' : ''}</td>
@@ -1222,12 +1262,12 @@ function renderContent(){
     const voceHead = `<tr><th>Voce</th><th class="num">Q.tà</th><th class="num">Prezzo unit.</th><th class="num">IVA</th><th class="num">Stimato netto</th><th class="num">Totale con IVA</th><th class="num">Speso effettivo</th><th class="num">Delta</th><th>Stato</th></tr>`;
     c.innerHTML = `
       <div class="cards">
-        <div class="card"><div class="label">Budget totale</div><input type="number" step="0.01" value="${w.budgetTotale}" onchange="updateWeddingField('budgetTotale', parseFloat(this.value)||0)" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--ink); border:none; background:transparent; padding:0;"></div>
-        <div class="card"><div class="label">Stimato</div><input type="number" step="0.01" value="${w.budgetStimato}" onchange="updateWeddingField('budgetStimato', parseFloat(this.value)||0)" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--ink); border:none; background:transparent; padding:0;"></div>
+        <div class="card"><div class="label">Budget totale</div>${isPlannerView ? `<input type="number" step="0.01" value="${w.budgetTotale}" onchange="updateWeddingField('budgetTotale', parseFloat(this.value)||0)" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--ink); border:none; background:transparent; padding:0;">` : `<div class="value">${fmtEuro(w.budgetTotale)}</div>`}</div>
+        <div class="card"><div class="label">Stimato</div>${isPlannerView ? `<input type="number" step="0.01" value="${w.budgetStimato}" onchange="updateWeddingField('budgetStimato', parseFloat(this.value)||0)" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--ink); border:none; background:transparent; padding:0;">` : `<div class="value">${fmtEuro(w.budgetStimato)}</div>`}</div>
         <div class="card ok"><div class="label">Speso finora</div><div class="value">${fmtEuro(totSpeso)}</div></div>
         <div class="card ${rimanente<3000?'warn':''}"><div class="label">Residuo disponibile</div><div class="value">${fmtEuro(rimanente)}</div></div>
       </div>
-      <div class="criterio-note">IVA calcolata al 22% su ogni voce. "Totale con IVA" = stimato netto × 1,22 (calcolato in automatico da quantità × prezzo unitario). "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale con IVA previsto). Clicca su quantità, prezzo, speso o stato per modificarli. La riga evidenziata in rosso è la voce che, sommata a tutte quelle precedenti, fa superare il budget stimato complessivo.</div>
+      <div class="criterio-note">${isPlannerView ? 'IVA calcolata al 22% su ogni voce. "Totale con IVA" = stimato netto × 1,22 (calcolato in automatico da quantità × prezzo unitario). "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale con IVA previsto). Clicca su quantità, prezzo, speso o stato per modificarli. La riga evidenziata in rosso è la voce che, sommata a tutte quelle precedenti, fa superare il budget stimato complessivo.' : 'Budget in sola visualizzazione.'}</div>
       ${w.categorie.map(cat=>`
         <div class="cat-block">
           <div class="cat-title">
@@ -1243,7 +1283,7 @@ function renderContent(){
                 <tbody>${sg.voci.map((v,idx)=>voceRow(v,cat.nome,sg.nome,idx)).join('')}</tbody>
               </table>
               </div>
-              <button class="btn-mini" style="margin-top:6px; font-size:11px;" onclick="addVoce('${cat.nome.replace(/'/g,"\\'")}','${sg.nome.replace(/'/g,"\\'")}')">+ Aggiungi voce a ${sg.nome}</button>
+              ${isPlannerView ? `<button class="btn-mini" style="margin-top:6px; font-size:11px;" onclick="addVoce('${cat.nome.replace(/'/g,"\\'")}','${sg.nome.replace(/'/g,"\\'")}')">+ Aggiungi voce a ${sg.nome}</button>` : ''}
             </div>
           `).join('') : `
           <div style="overflow-x:auto;">
@@ -1252,14 +1292,16 @@ function renderContent(){
             <tbody>${cat.voci.map((v,idx)=>voceRow(v,cat.nome,null,idx)).join('')}</tbody>
           </table>
           </div>
-          <button class="btn-mini" style="margin-top:6px; font-size:11px;" onclick="addVoce('${cat.nome.replace(/'/g,"\\'")}', null)">+ Aggiungi voce</button>
+          ${isPlannerView ? `<button class="btn-mini" style="margin-top:6px; font-size:11px;" onclick="addVoce('${cat.nome.replace(/'/g,"\\'")}', null)">+ Aggiungi voce</button>` : ''}
           `}
         </div>
       `).join('')}
+      ${isPlannerView ? `
       <div class="add-row" style="margin-top:6px;">
         <input type="text" id="newCatNome" placeholder="Nome nuova categoria (es. INTRATTENIMENTO)">
         <button onclick="addCategoria()">+ Aggiungi categoria</button>
       </div>
+      ` : ''}
     `;
   }
 
@@ -1335,10 +1377,16 @@ function renderContent(){
   }
 
   if(state.subtab==='moodboard'){
+    if(state.role==='sposi' && !w.sposiCanSeeDesign){
+      state.subtab = 'ospiti'; state.guestSubtab='principale';
+      c.innerHTML = renderGuestList(w);
+      persistWedding(w);
+      return;
+    }
     c.innerHTML = renderMoodboard(w);
     if(!state.moodSubtab || state.moodSubtab==='planimetria'){
       if(state.floorplanView==='3d') render3DScene(w.moodboard.floorplan);
-      else attachDrag(w);
+      else if(state.role==='planner') attachDrag(w);
     }
     persistWedding(w);
     return;
@@ -1565,6 +1613,9 @@ function renderFornitoreView(w){
           <div class="task-text">${t.d}</div>
         </div>
       `).join('') : `<div class="empty-state" style="margin-top:10px">Nessuna timeline caricata ancora per questo fornitore — il wedding planner non ha inserito task specifici.</div>`}
+      <div class="cat-title" style="margin-top:18px;"><h3 style="font-size:14px">Le tue note</h3></div>
+      <div class="criterio-note" style="margin-bottom:8px;">Qui puoi lasciare note utili per la wedding planner (es. orari di arrivo, esigenze particolari). Non puoi modificare altro in questa scheda.</div>
+      <textarea id="fornitoreNoteInput" rows="3" placeholder="Scrivi qui le tue note..." onchange="updateFornitoreField('${f.ref.replace(/'/g,"\\'")}','note',this.value)" style="width:100%; padding:10px; border:1px solid var(--rule); border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; resize:vertical;">${f.note||''}</textarea>
     </div>
   `;
 }
@@ -1848,6 +1899,12 @@ function renderPrincipale(w, guests){
       <input type="email" id="sposiEmailInput" placeholder="es. alessandroevaleria@gmail.com" value="${w.sposiEmail||''}" style="padding:6px 8px; border-radius:6px; border:1px solid var(--rule); min-width:260px;">
       <button class="btn-mini" onclick="saveSposiEmail()">Salva email sposi</button>
     </div>
+    <div class="criterio-note" style="display:flex; gap:10px; align-items:center;">
+      <label style="display:flex; gap:8px; align-items:center; cursor:pointer;">
+        <input type="checkbox" ${w.sposiCanSeeDesign?'checked':''} onchange="toggleSposiDesignConsent(this.checked)">
+        <span><b>Permetti agli sposi di vedere la sezione "Grafica & Moodboard"</b> (palette, stationary, planimetria) — sola visualizzazione, senza poterla modificare.</span>
+      </label>
+    </div>
     ` : ''}
   `;
 
@@ -1973,6 +2030,13 @@ function saveRsvpChannel(){
 function saveSposiEmail(){
   const w = currentWedding();
   w.sposiEmail = document.getElementById('sposiEmailInput').value.trim();
+  persistWedding(w);
+  renderContent();
+}
+function toggleSposiDesignConsent(checked){
+  const w = currentWedding();
+  w.sposiCanSeeDesign = checked;
+  persistWedding(w);
   renderContent();
 }
 
@@ -2249,21 +2313,24 @@ function renderMoodboard(w){
 }
 
 function renderPalette(mb){
+  const isPlannerView = state.role==='planner';
   return `
+    ${isPlannerView ? `
     <div class="add-row">
       <input type="color" id="newColorHex" value="#7A2635">
       <input type="text" id="newColorLabel" placeholder="Nome colore (es. Verde Uliveto)">
       <button onclick="addPaletteColor()">+ Aggiungi colore</button>
     </div>
+    ` : ''}
     ${mb.palette.length ? `<div class="swatch-grid">
       ${mb.palette.map((c,i)=>`
         <div class="swatch">
           <div class="chip" style="background:${c.hex}"></div>
           <div class="info"><div class="name">${c.label}</div><div class="hex">${c.hex}</div></div>
-          <button class="remove" onclick="removePaletteColor(${i})">rimuovi</button>
+          ${isPlannerView ? `<button class="remove" onclick="removePaletteColor(${i})">rimuovi</button>` : ''}
         </div>
       `).join('')}
-    </div>` : `<div class="empty-state">Nessun colore in palette ancora — aggiungine uno qui sopra.</div>`}
+    </div>` : `<div class="empty-state">Nessun colore in palette ancora${isPlannerView ? ' — aggiungine uno qui sopra.' : '.'}</div>`}
   `;
 }
 
@@ -2279,23 +2346,28 @@ function removePaletteColor(i){
 }
 
 function renderStationery(mb){
+  const isPlannerView = state.role==='planner';
   return `
+    ${isPlannerView ? `
     <div class="add-row">
       <input type="text" id="newStationCaption" placeholder="Didascalia (es. Segnaposto)">
       <button onclick="addStationeryCard()">+ Aggiungi voce</button>
     </div>
+    ` : ''}
     ${mb.stationery.length ? `<div class="station-grid">
       ${mb.stationery.map((s,i)=>`
         <div class="station-card">
           <div class="thumb">${s.img ? `<img src="${s.img}">` : 'Nessuna immagine caricata'}</div>
           <div class="cap">${s.cap}</div>
+          ${isPlannerView ? `
           <label class="upload-mini">Carica bozzetto
             <input type="file" accept="image/*" onchange="uploadStationeryImage(${i}, this)">
           </label>
           <button class="remove" onclick="removeStationeryCard(${i})">rimuovi voce</button>
+          ` : ''}
         </div>
       `).join('')}
-    </div>` : `<div class="empty-state">Nessuna voce di stationary ancora — aggiungine una qui sopra.</div>`}
+    </div>` : `<div class="empty-state">Nessuna voce di stationary ancora${isPlannerView ? ' — aggiungine una qui sopra.' : '.'}</div>`}
   `;
 }
 function addStationeryCard(){
@@ -2321,9 +2393,16 @@ function uploadStationeryImage(i, input){
 
 function renderFloorplan(w, mb){
   const fp = mb.floorplan;
+  const isPlannerView = state.role==='planner';
   if(!state.floorplanView) state.floorplanView = '2d';
 
-  const uploadBar = `
+  const viewToggleBar = `
+    <div class="add-row">
+      <button class="btn-mini" style="background:${state.floorplanView==='3d'?'var(--ink)':'var(--gold)'}; color:${state.floorplanView==='3d'?'var(--white-ish)':'var(--ink)'};" onclick="toggleFloorplanView()">${state.floorplanView==='3d' ? '← Torna alla vista 2D' : 'Visualizza in 3D'}</button>
+    </div>
+  `;
+
+  const uploadBar = !isPlannerView ? '' : `
     <div class="add-row">
       <label class="btn-mini" style="cursor:pointer;">Carica planimetria (immagine o PDF)
         <input type="file" accept="image/*,.pdf" style="display:none;" onchange="uploadFloorplanImage(this)">
@@ -2332,7 +2411,6 @@ function renderFloorplan(w, mb){
         <input type="file" accept=".dxf" style="display:none;" onchange="uploadFloorplanDXF(this)">
       </label>
       ${fp.referenceImage || fp.dxfEntities ? `<button class="btn-mini" style="background:var(--wine);" onclick="clearFloorplanBackground()">Rimuovi planimetria caricata</button>` : ''}
-      <button class="btn-mini" style="background:${state.floorplanView==='3d'?'var(--ink)':'var(--gold)'}; color:${state.floorplanView==='3d'?'var(--white-ish)':'var(--ink)'};" onclick="toggleFloorplanView()">${state.floorplanView==='3d' ? '← Torna alla vista 2D' : 'Visualizza in 3D'}</button>
     </div>
     ${fp.dxfEntities ? `<div class="floorplan-hint">File DXF caricato: ${fp.dxfEntities.length} elementi. Nota: solo il disegno (linee/forme) — i file .DWG nativi di AutoCAD non sono leggibili da un sito web, serve l'esportazione in .DXF.</div>` : ''}
   `;
@@ -2347,7 +2425,7 @@ function renderFloorplan(w, mb){
   const staffHtml = fp.staffTable ? `<div class="staff-table" style="top:38%; left:8%">${fp.staffTable}</div>` : '';
   const zonesHtml = fp.referenceImage || fp.dxfEntities ? '' : (fp.zones||[]).map(z=>`<div class="zone-label" style="top:${z.top}; left:${z.left}">${z.label}</div>`).join('');
   const pinsHtml = (fp.stations||[]).map(s=>`
-    <div class="station-pin" data-id="${s.id}" style="left:${s.x}%; top:${s.y}%" onpointerdown="startDragPin(event, ${s.id})">
+    <div class="station-pin" data-id="${s.id}" style="left:${s.x}%; top:${s.y}%" ${isPlannerView?`onpointerdown="startDragPin(event, ${s.id})"`:'style="cursor:default;"'}>
       <span class="n">${s.id}</span>${s.label}
     </div>
   `).join('');
@@ -2355,7 +2433,7 @@ function renderFloorplan(w, mb){
   const bgStyle = fp.referenceImage ? `background-image:url(${fp.referenceImage}); background-size:contain; background-repeat:no-repeat; background-position:center; background-color:#fff;` : '';
   const dxfSvg = fp.dxfEntities && !fp.referenceImage ? renderDxfSvg(fp) : '';
 
-  const settingsBar = `
+  const settingsBar = !isPlannerView ? '' : `
     <div class="add-row">
       <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">N. tavoli invitati</label>
       <input type="number" min="0" value="${fp.tables||0}" onchange="updateFloorplanField('tables', parseInt(this.value)||0)" style="width:70px; padding:6px 8px; border:1px solid var(--rule); border-radius:6px;">
@@ -2369,11 +2447,11 @@ function renderFloorplan(w, mb){
   `;
 
   if(!fp.stations || !fp.stations.length){
-    return uploadBar + settingsBar + `<div class="empty-state">Nessuna postazione ancora impostata — aggiungine una qui sopra.</div>`;
+    return viewToggleBar + uploadBar + settingsBar + `<div class="empty-state">Nessuna postazione ancora impostata${isPlannerView ? ' — aggiungine una qui sopra.' : '.'}</div>`;
   }
 
   if(state.floorplanView==='3d'){
-    return uploadBar + settingsBar + `
+    return viewToggleBar + uploadBar + settingsBar + `
       <div id="floorplan3dWrap" style="position:relative; width:100%; height:520px; border:1px solid var(--rule); border-radius:12px; overflow:hidden; background:#eef3f8;"></div>
       <div class="floorplan-hint">Vista 3D semplificata: tavoli e postazioni posizionati secondo la planimetria 2D. Trascina per ruotare, rotellina per zoom. Non è una ricostruzione architettonica del disegno CAD, ma una visualizzazione d'insieme dei posizionamenti.</div>
       <div class="floorplan-legend">
@@ -2382,7 +2460,7 @@ function renderFloorplan(w, mb){
     `;
   }
 
-  return uploadBar + settingsBar + `
+  return viewToggleBar + uploadBar + settingsBar + `
     <div class="floorplan-wrap" id="floorplanWrap" style="${bgStyle}">
       ${dxfSvg}
       ${zonesHtml}
@@ -2391,9 +2469,9 @@ function renderFloorplan(w, mb){
       ${pinsHtml}
     </div>
     <div class="floorplan-legend">
-      ${(fp.stations||[]).map(s=>`<span><b>${s.id}</b> — ${s.label} <button onclick="removeStation(${s.id})" style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:10px;">rimuovi</button></span>`).join('')}
+      ${(fp.stations||[]).map(s=>`<span><b>${s.id}</b> — ${s.label} ${isPlannerView?`<button onclick="removeStation(${s.id})" style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:10px;">rimuovi</button>`:''}</span>`).join('')}
     </div>
-    <div class="floorplan-hint">Trascina le postazioni numerate per riorganizzare la planimetria. I pallini rappresentano i ${fp.tables} tavoli invitati.</div>
+    <div class="floorplan-hint">${isPlannerView ? `Trascina le postazioni numerate per riorganizzare la planimetria. I pallini rappresentano i ${fp.tables} tavoli invitati.` : `I pallini rappresentano i ${fp.tables} tavoli invitati.`}</div>
   `;
 }
 
@@ -2668,7 +2746,7 @@ function renderAll(){
 }
 
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
-const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','guests','moodboard','tasks','rsvpChannel','sposiEmail','emergencyContacts'];
+const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','guests','moodboard','tasks','rsvpChannel','sposiEmail','sposiCanSeeDesign','emergencyContacts'];
 
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
@@ -2733,7 +2811,7 @@ async function loadAllWeddings(){
             budgetTotale:0, budgetStimato:0, imprevisti:0,
             categorie:[], fornitori:[], guests:[],
             moodboard:{ palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} },
-            tasks:{}, rsvpChannel:{tipo:'', valore:''}, sposiEmail:'',
+            tasks:{}, rsvpChannel:{tipo:'', valore:''}, sposiEmail:'', sposiCanSeeDesign:false,
             emergencyContacts:[{label:'',numero:''},{label:'',numero:''}]
           };
           weddings.push(w);
