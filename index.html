@@ -1476,7 +1476,6 @@ function renderContent(){
     if(!state.pagamentiView) state.pagamentiView = 'elenco';
     const pagamentiNav = `<div class="mood-subnav">
       <button class="${state.pagamentiView==='elenco'?'active':''}" onclick="setPagamentiView('elenco')">Elenco</button>
-      <button class="${state.pagamentiView==='generale'?'active':''}" onclick="setPagamentiView('generale')">Generale (tutti i matrimoni)</button>
       <button class="${state.pagamentiView==='dettaglio'?'active':''}" onclick="setPagamentiView('dettaglio')">Dettaglio scadenze</button>
     </div>`;
 
@@ -1502,53 +1501,6 @@ function renderContent(){
             <tbody>
               ${withMoney.map(row=>`
                 <tr>
-                  <td>${row.catNome}</td>
-                  <td>${row.label}</td>
-                  <td class="num">${fmtEuro(row.v.stimato)}</td>
-                  <td class="num">${fmtEuro(row.v.speso)}</td>
-                  <td class="num">${fmtEuro(row.v.stimato-(row.v.speso||0))}</td>
-                  <td>${row.v.stato ? `<span class="stamp ${row.v.stato}">${row.v.stato}</span>` : `<span class="stamp aperto">aperto</span>`}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
-      persistWedding(w);
-      return;
-    }
-
-    if(state.pagamentiView==='generale'){
-      const tutte = [];
-      weddings.forEach(ww=>{
-        ww.categorie.forEach(cat=>{
-          const groups = cat.sottogruppi ? cat.sottogruppi.map(sg=>({sgNome:sg.nome, voci:sg.voci})) : [{sgNome:null, voci:cat.voci}];
-          groups.forEach(g=>{
-            g.voci.forEach(v=>{
-              if(v.stimato>0){
-                tutte.push({matrimonio:ww.names, catNome:cat.nome, label: g.sgNome?`${g.sgNome} — ${v.v}`:v.v, v});
-              }
-            });
-          });
-        });
-      });
-      const totCosto = tutte.reduce((a,r)=>a+r.v.stimato,0);
-      const totVersato = tutte.reduce((a,r)=>a+(r.v.speso||0),0);
-      c.innerHTML = pagamentiNav + `
-        <div class="cards">
-          <div class="card"><div class="label">Matrimoni</div><div class="value">${weddings.length}</div></div>
-          <div class="card"><div class="label">Voci totali</div><div class="value">${tutte.length}</div></div>
-          <div class="card"><div class="label">Costo totale</div><div class="value">${fmtEuro(totCosto)}</div></div>
-          <div class="card ok"><div class="label">Versato totale</div><div class="value">${fmtEuro(totVersato)}</div></div>
-        </div>
-        <div class="cat-block">
-          <div class="cat-title"><h3>Pagamenti di tutti i matrimoni</h3></div>
-          <table>
-            <thead><tr><th>Matrimonio</th><th>Categoria</th><th>Voce</th><th class="num">Costo</th><th class="num">Versato</th><th class="num">Saldo</th><th>Stato</th></tr></thead>
-            <tbody>
-              ${tutte.map(row=>`
-                <tr>
-                  <td>${row.matrimonio}</td>
                   <td>${row.catNome}</td>
                   <td>${row.label}</td>
                   <td class="num">${fmtEuro(row.v.stimato)}</td>
