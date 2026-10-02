@@ -938,6 +938,13 @@ weddings.forEach(w=>{
     if(fp.dxfEntities===undefined) fp.dxfEntities = null;
     if(fp.dxfBounds===undefined) fp.dxfBounds = null;
   }
+  (w.categorie||[]).forEach(cat=>{
+    const allVoci = cat.sottogruppi ? cat.sottogruppi.flatMap(sg=>sg.voci) : cat.voci;
+    allVoci.forEach(v=>{
+      if(v.iva===undefined) v.iva = 22;
+      if(v.ivaFlag===undefined) v.ivaFlag = true; // mantiene il comportamento di calcolo già in uso finora
+    });
+  });
 });
 // Alcuni esempi compilati per mostrare come apparirebbe una lista già iniziata dagli sposi
 if(weddings[0].guests.length){
@@ -988,7 +995,7 @@ function addVoce(catNome, sgNome){
   const w = currentWedding();
   const cat = w.categorie.find(c=>c.nome===catNome);
   const arr = sgNome ? cat.sottogruppi.find(s=>s.nome===sgNome).voci : cat.voci;
-  arr.push({v:nome, q:1, prezzo:0, stimato:0, speso:null, stato:null});
+  arr.push({v:nome, q:1, prezzo:0, stimato:0, speso:null, stato:null, iva:22, ivaFlag:true});
   recomputeCategoryTotals(w);
   persistWedding(w);
   renderContent();
@@ -1059,6 +1066,10 @@ function updateVoceField(catNome, sgNome, idx, field, value){
     v.speso = value===''? null : (parseFloat(value)||0);
   } else if(field==='stato'){
     v.stato = value===''? null : value;
+  } else if(field==='iva'){
+    v.iva = parseFloat(value)||0;
+  } else if(field==='ivaFlag'){
+    v.ivaFlag = value===true || value==='true';
   }
   recomputeCategoryTotals(w);
   persistWedding(w);
@@ -1249,7 +1260,7 @@ function renderContent(){
       const groups = cat.sottogruppi ? cat.sottogruppi.map(sg=>({sgNome:sg.nome, voci:sg.voci})) : [{sgNome:null, voci:cat.voci}];
       groups.forEach(g=>{
         g.voci.forEach((v,idx)=>{
-          const conIva = Math.round(v.stimato*1.22*100)/100;
+          const conIva = v.ivaFlag ? Math.round(v.stimato*(1+(v.iva||0)/100)*100)/100 : v.stimato;
           const prevCum = cumulativeConIva;
           cumulativeConIva += conIva;
           if(tippingKey===null && w.budgetStimato>0 && cumulativeConIva > w.budgetStimato && prevCum <= w.budgetStimato){
@@ -1261,19 +1272,20 @@ function renderContent(){
 
     const isPlannerView = state.role==='planner';
     const voceRow = (v, catNome, sgNome, idx)=>{
-      const conIva = Math.round(v.stimato*1.22*100)/100;
+      const conIva = v.ivaFlag ? Math.round(v.stimato*(1+(v.iva||0)/100)*100)/100 : v.stimato;
       const delta = Math.round((conIva-(v.speso||0))*100)/100;
       const ref = `'${catNome.replace(/'/g,"\\'")}', ${sgNome?`'${sgNome.replace(/'/g,"\\'")}'`:'null'}, ${idx}`;
       const key = catNome+'|'+(sgNome||'')+'|'+idx;
       const isTipping = key===tippingKey;
       const statoStamp = v.stato ? `<span class="stamp ${v.stato}">${v.stato}</span>` : '—';
+      const ivaDisplay = v.ivaFlag ? `${v.iva||0}%` : 'inclusa';
       if(!isPlannerView){
         return `
         <tr ${isTipping ? 'style="background:rgba(166,62,62,0.12); border-left:3px solid var(--wine);"' : ''}>
           <td>${v.v}${isTipping ? ' <span class="stamp aperto" style="margin-left:6px;">supera il budget stimato</span>' : ''}</td>
           <td class="num">${v.q!==undefined?v.q:0}</td>
           <td class="num">${fmtEuro(v.prezzo)}</td>
-          <td class="num">22%</td>
+          <td class="num">${ivaDisplay}</td>
           <td class="num">${fmtEuro(v.stimato)}</td>
           <td class="num">${fmtEuro(conIva)}</td>
           <td class="num">${fmtEuro(v.speso)}</td>
@@ -1286,7 +1298,12 @@ function renderContent(){
           <td><input type="text" value="${v.v.replace(/"/g,'&quot;')}" onchange="updateVoceField(${ref},'v',this.value)" style="width:100%; min-width:140px; border:1px solid var(--rule); border-radius:5px; padding:4px 6px; font-size:13px; background:var(--white-ish);">${isTipping ? ' <span class="stamp aperto" style="margin-left:6px;">supera il budget stimato</span>' : ''}</td>
           <td class="num"><input type="number" step="1" value="${v.q!==undefined?v.q:0}" onchange="updateVoceField(${ref},'q',this.value)" style="width:56px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
           <td class="num"><input type="number" step="0.01" value="${v.prezzo!==undefined?v.prezzo:0}" onchange="updateVoceField(${ref},'prezzo',this.value)" style="width:72px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
-          <td class="num">22%</td>
+          <td class="num">
+            <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
+              <input type="checkbox" ${v.ivaFlag?'checked':''} onchange="updateVoceField(${ref},'ivaFlag',this.checked)" title="Calcola IVA su questa voce">
+              <input type="number" step="1" min="0" value="${v.iva!==undefined?v.iva:22}" onchange="updateVoceField(${ref},'iva',this.value)" style="width:44px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 4px; font-family:'IBM Plex Mono',monospace; font-size:12px;" ${v.ivaFlag?'':'disabled'}>%
+            </div>
+          </td>
           <td class="num">${fmtEuro(v.stimato)}</td>
           <td class="num">${fmtEuro(conIva)}</td>
           <td class="num"><input type="number" step="0.01" value="${v.speso!==null&&v.speso!==undefined?v.speso:''}" placeholder="—" onchange="updateVoceField(${ref},'speso',this.value)" style="width:76px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
@@ -1311,7 +1328,7 @@ function renderContent(){
         <div class="card ok"><div class="label">Speso finora</div><div class="value">${fmtEuro(totSpeso)}</div></div>
         <div class="card ${rimanente<3000?'warn':''}"><div class="label">Residuo disponibile</div><div class="value">${fmtEuro(rimanente)}</div></div>
       </div>
-      <div class="criterio-note">${isPlannerView ? 'IVA calcolata al 22% su ogni voce. "Totale con IVA" = stimato netto × 1,22 (calcolato in automatico da quantità × prezzo unitario). "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale con IVA previsto). Clicca su quantità, prezzo, speso o stato per modificarli. La riga evidenziata in rosso è la voce che, sommata a tutte quelle precedenti, fa superare il budget stimato complessivo.' : 'Budget in sola visualizzazione.'}</div>
+      <div class="criterio-note">${isPlannerView ? 'Colonna IVA: la spunta decide se calcolarla o no. Spuntata: scrivi la percentuale e viene aggiunta al prezzo ("Totale con IVA" = stimato netto × (1 + %)). Non spuntata: il prezzo che hai scritto è già IVA inclusa, "Totale con IVA" resta identico a "Stimato netto", nessun calcolo aggiuntivo. "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale previsto). Clicca su quantità, prezzo, speso o stato per modificarli. La riga evidenziata in rosso è la voce che, sommata a tutte quelle precedenti, fa superare il budget stimato complessivo.' : 'Budget in sola visualizzazione.'}</div>
       ${w.categorie.map(cat=>`
         <div class="cat-block">
           <div class="cat-title">
