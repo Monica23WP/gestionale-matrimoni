@@ -1394,7 +1394,9 @@ function renderContent(){
     w.fornitori.forEach((f,i)=>{ (groups[f.cat] ||= []).push({...f, _idx:i}); });
     c.innerHTML = addFornitoreForm + Object.entries(groups).map(([cat,list])=>`
       <div class="cat-block">
-        <div class="cat-title"><h3>${cat}</h3></div>
+        <div class="cat-title">
+          <input type="text" value="${cat.replace(/"/g,'&quot;')}" onchange="renameMacrocategoria('${cat.replace(/'/g,"\\'")}',this.value)" style="font-family:'Arcon',sans-serif; font-weight:600; font-size:16px; color:var(--ink); border:1px solid transparent; border-radius:6px; padding:2px 4px; background:transparent;" onfocus="this.style.borderColor='var(--rule)'" onblur="this.style.borderColor='transparent'">
+        </div>
         <table>
           <thead><tr><th>Ruolo (microcategoria)</th><th>Nome persona / azienda</th><th>Contattato</th><th>Prenotato</th><th>Note</th><th></th></tr></thead>
           <tbody>
@@ -1828,6 +1830,14 @@ function updateFornitoreByIndex(idx, field, value){
   const w = currentWedding();
   w.fornitori[idx][field] = value;
   persistWedding(w);
+}
+function renameMacrocategoria(oldCat, newCat){
+  newCat = newCat.trim();
+  if(!newCat || newCat===oldCat){ renderContent(); return; }
+  const w = currentWedding();
+  w.fornitori.forEach(f=>{ if(f.cat===oldCat) f.cat = newCat; });
+  persistWedding(w);
+  renderContent();
 }
 function removeFornitore(idx){
   if(!confirm('Rimuovere questo fornitore?')) return;
