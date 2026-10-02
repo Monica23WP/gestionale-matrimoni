@@ -3201,6 +3201,117 @@ function parseItalianNumber(str){
 }
 function exportCurrentToExcel(){
   if(typeof XLSX === 'undefined'){ alert('Il supporto Excel non è disponibile in questo momento.'); return; }
+  if(state.subtab==='budget'){ exportBudgetToExcel(); return; }
+  if(state.subtab==='pagamenti'){ exportPagamentiToExcel(); return; }
+  exportGenericTablesToExcel();
+}
+
+// ============ EXPORT BUDGET → Excel con formule vere (una tabella unica, tutte le categorie) ============
+function exportBudgetToExcel(){
+  const w = currentWedding();
+  const rows = [['Voce','Quantità','Prezzo unitario','IVA %','IVA attiva','Stimato netto','Totale con IVA','Speso effettivo','Delta','Stato']];
+  const dataRowNums = [];
+  let rowNum = 1; // riga 1 = intestazione (le righe Excel sono 1-based)
+
+  w.categorie.forEach(cat=>{
+    rowNum++; rows.push([cat.nome,'','','','','','','','','']);
+    const groups = cat.sottogruppi ? cat.sottogruppi.map(sg=>({sgNome:sg.nome, voci:sg.voci})) : [{sgNome:null, voci:cat.voci}];
+    groups.forEach(g=>{
+      if(g.sgNome){ rowNum++; rows.push(['   '+g.sgNome,'','','','','','','','','']); }
+      g.voci.forEach(v=>{
+        rowNum++;
+        dataRowNums.push(rowNum);
+        rows.push([v.v, v.q||0, v.prezzo||0, v.iva||0, !!v.ivaFlag, '', '', v.speso||0, '', v.stato||'—']);
+      });
+    });
+  });
+  rowNum++;
+  const totalRow = rowNum;
+  rows.push(['TOTALE COMPLESSIVO','','','','','','','','','']);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  dataRowNums.forEach(r=>{
+    ws['F'+r] = { t:'n', f:`B${r}*C${r}`, z:'#,##0.00 "€"' };
+    ws['G'+r] = { t:'n', f:`IF(E${r},F${r}*(1+D${r}/100),F${r})`, z:'#,##0.00 "€"' };
+    ws['H'+r] = { ...ws['H'+r], z:'#,##0.00 "€"' };
+    ws['I'+r] = { t:'n', f:`G${r}-H${r}`, z:'#,##0.00 "€"' };
+    ws['C'+r] = { ...ws['C'+r], z:'#,##0.00 "€"' };
+  });
+  ['F','G','H','I'].forEach(col=>{
+    ws[col+totalRow] = { t:'n', f:`SUM(${col}2:${col}${totalRow-1})`, z:'#,##0.00 "€"' };
+  });
+  ws['!cols'] = [{wch:34},{wch:9},{wch:13},{wch:7},{wch:9},{wch:14},{wch:14},{wch:14},{wch:12},{wch:12}];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Budget');
+  XLSX.writeFile(wb, (w.names||'Budget').replace(/[^a-zA-Z0-9]+/g,'_') + '_Budget.xlsx');
+}
+
+// ============ EXPORT PAGAMENTI → Excel con formule vere (elenco voci + dettaglio scadenze) ============
+function exportPagamentiToExcel(){
+  const w = currentWedding();
+  const wb = XLSX.utils.book_new();
+
+  // --- Foglio 1: Elenco voci con Saldo calcolato ---
+  const rows1 = [['Categoria','Voce','Costo','Versato','Saldo','Stato']];
+  const dataRows1 = [];
+  let r1 = 1;
+  w.categorie.forEach(cat=>{
+    const groups = cat.sottogruppi ? cat.sottogruppi.map(sg=>({sgNome:sg.nome, voci:sg.voci})) : [{sgNome:null, voci:cat.voci}];
+    groups.forEach(g=>{
+      g.voci.forEach(v=>{
+        if(v.stimato>0){
+          r1++; dataRows1.push(r1);
+          rows1.push([cat.nome, g.sgNome?`${g.sgNome} — ${v.v}`:v.v, v.stimato, v.speso||0, '', v.stato||'—']);
+        }
+      });
+    });
+  });
+  r1++; const totRow1 = r1;
+  rows1.push(['TOTALE','','','','','']);
+  const ws1 = XLSX.utils.aoa_to_sheet(rows1);
+  dataRows1.forEach(r=>{
+    ws1['E'+r] = { t:'n', f:`C${r}-D${r}`, z:'#,##0.00 "€"' };
+    ws1['C'+r] = { ...ws1['C'+r], z:'#,##0.00 "€"' };
+    ws1['D'+r] = { ...ws1['D'+r], z:'#,##0.00 "€"' };
+  });
+  ['C','D','E'].forEach(col=>{ ws1[col+totRow1] = { t:'n', f:`SUM(${col}2:${col}${totRow1-1})`, z:'#,##0.00 "€"' }; });
+  ws1['!cols'] = [{wch:16},{wch:34},{wch:13},{wch:13},{wch:13},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Elenco pagamenti');
+
+  // --- Foglio 2: Dettaglio scadenze con totale pagato/da versare calcolato ---
+  const rows2 = [['Voce','Etichetta scadenza','Data scadenza','Importo','Pagato']];
+  const dataRows2 = [];
+  let r2 = 1;
+  w.categorie.forEach(cat=>{
+    const groups = cat.sottogruppi ? cat.sottogruppi.map(sg=>({sgNome:sg.nome, voci:sg.voci})) : [{sgNome:null, voci:cat.voci}];
+    groups.forEach(g=>{
+      g.voci.forEach(v=>{
+        (v.scadenze||[]).forEach(s=>{
+          r2++; dataRows2.push(r2);
+          rows2.push([g.sgNome?`${g.sgNome} — ${v.v}`:v.v, s.label, s.data, s.importo||0, !!s.pagato]);
+        });
+      });
+    });
+  });
+  if(dataRows2.length){
+    r2++; const pagatoRow = r2;
+    rows2.push(['TOTALE PAGATO','','','','']);
+    r2++; const daVersareRow = r2;
+    rows2.push(['TOTALE DA VERSARE','','','','']);
+    const ws2 = XLSX.utils.aoa_to_sheet(rows2);
+    const first = dataRows2[0], last = dataRows2[dataRows2.length-1];
+    ws2['D'+pagatoRow] = { t:'n', f:`SUMIF(E${first}:E${last},TRUE,D${first}:D${last})`, z:'#,##0.00 "€"' };
+    ws2['D'+daVersareRow] = { t:'n', f:`SUMIF(E${first}:E${last},FALSE,D${first}:D${last})`, z:'#,##0.00 "€"' };
+    dataRows2.forEach(r=>{ ws2['D'+r] = { ...ws2['D'+r], z:'#,##0.00 "€"' }; });
+    ws2['!cols'] = [{wch:30},{wch:24},{wch:14},{wch:13},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Scadenze');
+  }
+
+  XLSX.writeFile(wb, (w.names||'Pagamenti').replace(/[^a-zA-Z0-9]+/g,'_') + '_Pagamenti.xlsx');
+}
+
+function exportGenericTablesToExcel(){
   const tables = scrapeVisibleTables();
   if(!tables.length){ alert('Non ci sono tabelle da esportare in questa scheda.'); return; }
   const wb = XLSX.utils.book_new();
