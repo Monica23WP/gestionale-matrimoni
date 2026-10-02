@@ -1321,12 +1321,16 @@ function renderContent(){
       `;
     };
     const voceHead = `<tr><th>Voce</th><th class="num">Q.tà</th><th class="num">Prezzo unit.</th><th class="num">IVA</th><th class="num">Stimato netto</th><th class="num">Totale con IVA</th><th class="num">Speso effettivo</th><th class="num">Delta</th><th>Stato</th>${isPlannerView?'<th></th>':''}</tr>`;
+    const totConIva = Math.round(cumulativeConIva*100)/100;
+    const scostamento = Math.round((totConIva - w.budgetTotale)*100)/100;
     c.innerHTML = `
       <div class="cards">
         <div class="card"><div class="label">Budget totale</div>${isPlannerView ? `<input type="number" step="0.01" value="${w.budgetTotale}" onchange="updateWeddingField('budgetTotale', parseFloat(this.value)||0)" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--ink); border:none; background:transparent; padding:0;">` : `<div class="value">${fmtEuro(w.budgetTotale)}</div>`}</div>
         <div class="card"><div class="label">Stimato</div>${isPlannerView ? `<input type="number" step="0.01" value="${w.budgetStimato}" onchange="updateWeddingField('budgetStimato', parseFloat(this.value)||0)" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; color:var(--ink); border:none; background:transparent; padding:0;">` : `<div class="value">${fmtEuro(w.budgetStimato)}</div>`}</div>
         <div class="card ok"><div class="label">Speso finora</div><div class="value">${fmtEuro(totSpeso)}</div></div>
         <div class="card ${rimanente<3000?'warn':''}"><div class="label">Residuo disponibile</div><div class="value">${fmtEuro(rimanente)}</div></div>
+        <div class="card"><div class="label">Totale previsto (con IVA dove prevista)</div><div class="value">${fmtEuro(totConIva)}</div></div>
+        <div class="card ${scostamento>0?'warn':'ok'}"><div class="label">${scostamento>0 ? 'Stai sforando il budget totale di' : 'Sei sotto il budget totale di'}</div><div class="value">${fmtEuro(Math.abs(scostamento))}</div></div>
       </div>
       <div class="criterio-note">${isPlannerView ? 'Colonna IVA: la spunta decide se calcolarla o no. Spuntata: scrivi la percentuale e viene aggiunta al prezzo ("Totale con IVA" = stimato netto × (1 + %)). Non spuntata: il prezzo che hai scritto è già IVA inclusa, "Totale con IVA" resta identico a "Stimato netto", nessun calcolo aggiuntivo. "Delta" = totale con IVA − speso effettivo (in bordeaux se lo speso ha già superato il totale previsto). Clicca su quantità, prezzo, speso o stato per modificarli. La riga evidenziata in rosso è la voce che, sommata a tutte quelle precedenti, fa superare il budget stimato complessivo.' : 'Budget in sola visualizzazione.'}</div>
       ${w.categorie.map(cat=>`
