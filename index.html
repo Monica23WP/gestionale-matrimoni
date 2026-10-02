@@ -1481,7 +1481,20 @@ function renderContent(){
     </div>`;
 
     if(state.pagamentiView==='elenco'){
+      let totalePagato = 0, totaleDaVersare = 0;
+      withMoney.forEach(row=>{
+        (row.v.scadenze||[]).forEach(s=>{
+          if(s.pagato) totalePagato += (s.importo||0);
+          else totaleDaVersare += (s.importo||0);
+        });
+      });
+      totalePagato = Math.round(totalePagato*100)/100;
+      totaleDaVersare = Math.round(totaleDaVersare*100)/100;
       c.innerHTML = pagamentiNav + `
+        <div class="cards">
+          <div class="card ok"><div class="label">Totale pagato (acconti registrati)</div><div class="value">${fmtEuro(totalePagato)}</div></div>
+          <div class="card ${totaleDaVersare>0?'warn':''}"><div class="label">Totale ancora da versare</div><div class="value">${fmtEuro(totaleDaVersare)}</div></div>
+        </div>
         <div class="cat-block">
           <div class="cat-title"><h3>Stato pagamenti per voce</h3></div>
           <table>
