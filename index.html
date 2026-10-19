@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Monica Coppolino — Wedding Planner | Gestionale Matrimoni</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#2D337A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gestionale">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Firebase (usato solo se configuri firebaseConfig più sotto nel file) -->
@@ -1228,7 +1236,7 @@ function renderSubnav(){
     `).join('');
   } else if(state.role==='sposi'){
     const w = currentWedding();
-    const sposiTabs = [['ospiti','Lista Invitati'],['budget','Budget']];
+    const sposiTabs = [['ospiti','Lista Invitati'],['budget','Budget'],['pagamenti','Pagamenti']];
     if(w.sposiCanSeeDesign) sposiTabs.push(['moodboard','Grafica & Moodboard']);
     nav.innerHTML = sposiTabs.map(([id,label])=>`
       <button class="${state.subtab===id?'active':''}" onclick="setSubtab('${id}')">${label}</button>
@@ -1474,10 +1482,11 @@ function renderContent(){
     });
 
     if(!state.pagamentiView) state.pagamentiView = 'elenco';
-    const pagamentiNav = `<div class="mood-subnav">
+    if(state.role!=='planner') state.pagamentiView = 'elenco'; // sposi e fornitori vedono solo l'elenco, mai il dettaglio modificabile
+    const pagamentiNav = state.role==='planner' ? `<div class="mood-subnav">
       <button class="${state.pagamentiView==='elenco'?'active':''}" onclick="setPagamentiView('elenco')">Elenco</button>
       <button class="${state.pagamentiView==='dettaglio'?'active':''}" onclick="setPagamentiView('dettaglio')">Dettaglio scadenze</button>
-    </div>`;
+    </div>` : '';
 
     if(state.pagamentiView==='elenco'){
       let totalePagato = 0, totaleDaVersare = 0;
@@ -1518,6 +1527,7 @@ function renderContent(){
     }
 
     // ---- Vista Dettaglio scadenze ----
+    const isPlannerP = state.role==='planner';
     const oggi = new Date(); oggi.setHours(0,0,0,0);
     const prossime = [];
     withMoney.forEach(row=>{
@@ -1544,10 +1554,8 @@ function renderContent(){
                 <td>${p.scadenza.data}</td>
                 <td class="num">${fmtEuro(p.scadenza.importo)}</td>
                 <td>${p.diffGiorni<0 ? `<span class="stamp aperto">scaduta da ${Math.abs(p.diffGiorni)}g</span>` : p.diffGiorni===0 ? `<span class="stamp acconto">oggi</span>` : `tra ${p.diffGiorni}g`}</td>
-                <td>
-                  <button class="btn-mini" style="font-size:10.5px; padding:4px 8px;" onclick="sendReminderEmail('${p.catNome.replace(/'/g,"\\'")}',${p.sgNome?`'${p.sgNome.replace(/'/g,"\\'")}'`:'null'},${p.idx},${p.sIdx},'promemoria')">✉ Promemoria</button>
-                  <button class="btn-mini" style="font-size:10.5px; padding:4px 8px;" onclick="sendReminderEmail('${p.catNome.replace(/'/g,"\\'")}',${p.sgNome?`'${p.sgNome.replace(/'/g,"\\'")}'`:'null'},${p.idx},${p.sIdx},'giorno')">✉ Del giorno</button>
-                </td>
+                <td>${isPlannerP ? `<button class="btn-mini" style="font-size:10.5px; padding:4px 8px;" onclick="sendReminderEmail('${p.catNome.replace(/'/g,"\\'")}',${p.sgNome?`'${p.sgNome.replace(/'/g,"\\'")}'`:'null'},${p.idx},${p.sIdx},'promemoria')">✉ Promemoria</button>
+                  <button class="btn-mini" style="font-size:10.5px; padding:4px 8px;" onclick="sendReminderEmail('${p.catNome.replace(/'/g,"\\'")}',${p.sgNome?`'${p.sgNome.replace(/'/g,"\\'")}'`:'null'},${p.idx},${p.sIdx},'giorno')">✉ Del giorno</button>` : ''}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1578,26 +1586,24 @@ function renderContent(){
             <tbody>
               ${v.scadenze.map((s,sIdx)=>`
                 <tr>
-                  <td><input type="text" value="${s.label}" onchange="updateScadenza(${ref},${sIdx},'label',this.value)" style="width:100%; border:none; background:none; font-size:12.5px;"></td>
-                  <td><input type="date" value="${s.data}" onchange="updateScadenza(${ref},${sIdx},'data',this.value)" style="font-size:12px; border:1px solid var(--rule); border-radius:5px; padding:3px 5px;"></td>
-                  <td class="num"><input type="number" step="0.01" value="${s.importo}" onchange="updateScadenza(${ref},${sIdx},'importo',this.value)" style="width:80px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;"></td>
-                  <td><input type="checkbox" ${s.pagato?'checked':''} onchange="updateScadenza(${ref},${sIdx},'pagato',this.checked)"></td>
-                  <td>
-                    <button class="btn-mini" style="font-size:10px; padding:3px 6px;" onclick="sendReminderEmail(${ref},${sIdx},'promemoria')">✉ Promemoria</button>
+                  <td>${isPlannerP ? `<input type="text" value="${s.label}" onchange="updateScadenza(${ref},${sIdx},'label',this.value)" style="width:100%; border:none; background:none; font-size:12.5px;">` : s.label}</td>
+                  <td>${isPlannerP ? `<input type="date" value="${s.data}" onchange="updateScadenza(${ref},${sIdx},'data',this.value)" style="font-size:12px; border:1px solid var(--rule); border-radius:5px; padding:3px 5px;">` : s.data}</td>
+                  <td class="num">${isPlannerP ? `<input type="number" step="0.01" value="${s.importo}" onchange="updateScadenza(${ref},${sIdx},'importo',this.value)" style="width:80px; text-align:right; border:1px solid var(--rule); border-radius:5px; padding:3px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px;">` : fmtEuro(s.importo)}</td>
+                  <td>${isPlannerP ? `<input type="checkbox" ${s.pagato?'checked':''} onchange="updateScadenza(${ref},${sIdx},'pagato',this.checked)">` : (s.pagato ? '✓ pagato' : '—')}</td>
+                  <td>${isPlannerP ? `<button class="btn-mini" style="font-size:10px; padding:3px 6px;" onclick="sendReminderEmail(${ref},${sIdx},'promemoria')">✉ Promemoria</button>
                     <button class="btn-mini" style="font-size:10px; padding:3px 6px;" onclick="sendReminderEmail(${ref},${sIdx},'giorno')">✉ Del giorno</button>
-                    <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:10px" onclick="removeScadenza(${ref},${sIdx})">rimuovi</button>
-                  </td>
+                    <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:10px" onclick="removeScadenza(${ref},${sIdx})">rimuovi</button>` : ''}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
           ` : `<div class="empty-state" style="margin:6px 0;">Nessuna scadenza impostata per questa voce.</div>`}
-          <div class="add-row" style="margin-top:8px;">
+          ${isPlannerP ? `<div class="add-row" style="margin-top:8px;">
             <input type="text" id="scLabel_${row.catNome.replace(/[^a-zA-Z0-9]/g,'')}_${row.sgNome?row.sgNome.replace(/[^a-zA-Z0-9]/g,''):'x'}_${row.idx}" placeholder="es. Acconto alla firma">
             <input type="date" id="scData_${row.catNome.replace(/[^a-zA-Z0-9]/g,'')}_${row.sgNome?row.sgNome.replace(/[^a-zA-Z0-9]/g,''):'x'}_${row.idx}">
             <input type="number" step="0.01" id="scImporto_${row.catNome.replace(/[^a-zA-Z0-9]/g,'')}_${row.sgNome?row.sgNome.replace(/[^a-zA-Z0-9]/g,''):'x'}_${row.idx}" placeholder="Importo" style="width:100px;">
             <button onclick="addScadenza(${ref})">+ Aggiungi scadenza</button>
-          </div>
+          </div>` : ''}
         </div>
       `}).join('')}
     `;
@@ -1906,6 +1912,12 @@ const RSVP_LABELS = {confermato:'Confermato', 'in attesa':'In attesa', declinato
 
 function renderGuestList(w){
   const guests = w.guests || (w.guests = []);
+
+  if(state.role==='sposi'){
+    // Gli sposi vedono solo la Lista Principale, senza le altre viste operative (cucina/camerieri/accoglienza)
+    return renderPrincipale(w, guests);
+  }
+
   const subtabs = [['principale','Lista Principale (Sposi)'],['cucina','Per la cucina'],['particolarita','Particolarità menu'],['sala','Per i camerieri'],['accoglienza','Accoglienza ospiti']];
   const nav = `<div class="mood-subnav">${subtabs.map(([id,label])=>`
     <button class="${state.guestSubtab===id?'active':''}" onclick="setGuestSubtab('${id}')">${label}</button>
@@ -2917,7 +2929,12 @@ async function persistWedding(w){
   try{
     setSaveStatus('Salvataggio…', 'var(--ochre)');
     const payload = {};
-    PERSIST_FIELDS.forEach(k=> payload[k] = w[k]);
+    let fieldsToSave = PERSIST_FIELDS;
+    if(FIREBASE_READY && identity){
+      if(identity.role==='sposi') fieldsToSave = ['guests','rsvpChannel'];
+      else if(identity.role==='fornitore') fieldsToSave = ['fornitori'];
+    }
+    fieldsToSave.forEach(k=> payload[k] = w[k]);
     if(FIREBASE_READY){
       await db.collection('weddings').doc(w.id).set(payload, {merge:true});
     } else if(HAS_STORAGE){
@@ -3340,6 +3357,13 @@ async function initApp(){
 }
 
 initApp();
+
+// Registra il service worker, necessario perché il browser proponga "Installa app"
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(e=>console.log('Service worker non registrato:', e));
+  });
+}
 </script>
 </body>
 </html>
