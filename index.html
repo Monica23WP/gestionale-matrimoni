@@ -991,6 +991,7 @@ weddings.forEach(w=>{
   (w.fornitori||[]).forEach(f=>{
     if(f.email===undefined) f.email='';
     if(!f.telefoni) f.telefoni = [];
+    if(f.visibileSposi===undefined) f.visibileSposi = false;
   });
   (w.guests||[]).forEach(g=>{
     if(g.rsvp===undefined) g.rsvp = 'in attesa';
@@ -1300,13 +1301,26 @@ function renderSidebar(){
 }
 
 function renderVetrinaFornitori(w){
-  const ids = w.sposiFornitoriVisibili || [];
-  const selezionati = masterFornitori.filter(f=>ids.includes(f.id));
-  if(!selezionati.length){
+  // Fonte 1: fornitori globali selezionati a mano dal planner (Lista Invitati → Lista Principale)
+  const idsGlobali = w.sposiFornitoriVisibili || [];
+  const daGlobali = masterFornitori.filter(f=>idsGlobali.includes(f.id));
+
+  // Fonte 2: fornitori di QUESTO matrimonio flaggati "Visibile a sposi" — se trovano una corrispondenza
+  // nel database globale (stessa email) ereditano foto/social/sito; altrimenti vengono mostrati con i dati essenziali.
+  const daMatrimonio = (w.fornitori||[]).filter(f=>f.visibileSposi).map(f=>{
+    const match = f.email ? masterFornitori.find(mf=>mf.email && mf.email.toLowerCase()===f.email.toLowerCase()) : null;
+    return match || { nome:f.ref, categoria:f.cat, contatto:f.contatto||'', sito:'', social:[], video:[], foto:[], _soloEssenziale:true, _note:f.note };
+  });
+
+  // unione senza duplicati (stesso nome = stesso fornitore)
+  const combinati = [...daGlobali];
+  daMatrimonio.forEach(f=>{ if(!combinati.find(x=>x.nome===f.nome)) combinati.push(f); });
+
+  if(!combinati.length){
     return `<div class="empty-state">La wedding planner non ha ancora condiviso nessun fornitore con voi in questa sezione.</div>`;
   }
   const groups = {};
-  selezionati.forEach(f=>{ (groups[f.categoria] ||= []).push(f); });
+  combinati.forEach(f=>{ (groups[f.categoria||'Altro'] ||= []).push(f); });
   return `
     <div class="criterio-note">Una selezione di fornitori di fiducia scelti per voi dalla vostra wedding planner.</div>
     ${Object.entries(groups).map(([cat,list])=>`
@@ -1316,6 +1330,7 @@ function renderVetrinaFornitori(w){
           <div class="fornitore-card" style="margin-bottom:14px;">
             <h2 style="font-size:17px;">${f.nome}</h2>
             ${f.contatto ? `<div class="cat">${f.contatto}</div>` : ''}
+            ${f._note ? `<div style="margin-top:8px; font-size:13px; color:var(--ink-soft);">${f._note}</div>` : ''}
             ${f.sito ? `<div style="margin-top:8px; font-size:13px;"><a href="${f.sito}" target="_blank" rel="noopener" style="color:var(--wine);">${f.sito}</a></div>` : ''}
             ${(f.social||[]).length ? `
               <div style="margin-top:6px; display:flex; gap:10px; flex-wrap:wrap;">
@@ -1332,7 +1347,7 @@ function renderVetrinaFornitori(w){
               <div style="margin-top:12px; display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px;">
                 ${f.foto.map(foto=>`<img src="${foto}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; border:1px solid var(--rule);">`).join('')}
               </div>
-            ` : `<div class="floorplan-hint" style="margin-top:10px;">Nessuna foto caricata ancora.</div>`}
+            ` : (f._soloEssenziale ? '' : `<div class="floorplan-hint" style="margin-top:10px;">Nessuna foto caricata ancora.</div>`)}
           </div>
         `).join('')}
       </div>
@@ -1827,7 +1842,7 @@ function renderContent(){
           <input type="text" value="${cat.replace(/"/g,'&quot;')}" onchange="renameMacrocategoria('${cat.replace(/'/g,"\\'")}',this.value)" style="font-family:'Arcon',sans-serif; font-weight:600; font-size:16px; color:var(--ink); border:1px solid transparent; border-radius:6px; padding:2px 4px; background:transparent;" onfocus="this.style.borderColor='var(--rule)'" onblur="this.style.borderColor='transparent'">
         </div>
         <table>
-          <thead><tr><th>Ruolo (microcategoria)</th><th>Nome persona / azienda</th><th>Contattato</th><th>Prenotato</th><th>Note</th><th></th></tr></thead>
+          <thead><tr><th>Ruolo (microcategoria)</th><th>Nome persona / azienda</th><th>Contattato</th><th>Prenotato</th><th>Note</th><th>Visibile a sposi</th><th></th></tr></thead>
           <tbody>
             ${list.map(f=>`
               <tr>
@@ -1836,6 +1851,7 @@ function renderContent(){
                 <td><input type="checkbox" ${f.contattato?'checked':''} onchange="toggleFornitoreFlag('${f.ref.replace(/'/g,"\\'")}','contattato',this.checked)"></td>
                 <td><input type="checkbox" ${f.prenotato?'checked':''} onchange="toggleFornitoreFlag('${f.ref.replace(/'/g,"\\'")}','prenotato',this.checked)"></td>
                 <td><input type="text" value="${f.note||''}" onchange="updateFornitoreField('${f.ref.replace(/'/g,"\\'")}','note',this.value)" style="width:100%; border:none; background:none; font-size:13px;"></td>
+                <td style="text-align:center;"><input type="checkbox" ${f.visibileSposi?'checked':''} onchange="toggleFornitoreFlag('${f.ref.replace(/'/g,"\\'")}','visibileSposi',this.checked)" title="Visibile nella sezione Fornitori che vedono gli sposi"></td>
                 <td><button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeFornitore(${f._idx})">rimuovi</button></td>
               </tr>
             `).join('')}
