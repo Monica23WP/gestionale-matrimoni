@@ -602,6 +602,42 @@
   .export-toolbar button:hover{ background:var(--ink); color:var(--white-ish); }
   tr[data-include="0"] .inc-label{ text-decoration:line-through; color:var(--ink-soft); opacity:0.55; }
 
+  /* ============ DISPONIBILITÀ FORNITORI (calendario) ============ */
+  .mf-list-item{
+    cursor:pointer; padding:10px 12px; margin-bottom:6px; border-radius:8px;
+    border:1px solid var(--rule); background:var(--paper); position:relative;
+  }
+  .mf-list-item.active{ background:var(--ink); border-color:var(--ink); }
+  .mf-list-item.active .mf-nome{ color:var(--white-ish); }
+  .mf-list-item.active .mf-cat{ color:var(--white-ish); opacity:0.75; }
+  .mf-nome{ font-family:'Arcon',sans-serif; font-weight:600; font-size:14px; color:var(--ink); display:block;}
+  .mf-cat{ font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em;}
+  .mf-list-item .mf-del{ position:absolute; top:6px; right:8px; border:none; background:none; color:var(--wine); cursor:pointer; font-size:13px; }
+  .mf-list-item.active .mf-del{ color:#ffb0b0; }
+
+  .cal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .cal-header h2{ font-family:'Arcon',sans-serif; font-size:19px; color:var(--ink); min-width:200px; text-align:center;}
+  .cal-nav-btn{
+    font-family:'Inter',sans-serif; font-size:16px; font-weight:600;
+    width:34px; height:34px; border-radius:50%; border:1px solid var(--rule);
+    background:var(--paper); color:var(--ink); cursor:pointer;
+  }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .cal-dow{ text-align:center; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); padding-bottom:4px; }
+  .cal-daycell{
+    border:1px solid var(--rule); border-radius:8px; padding:6px 5px; min-height:58px;
+    cursor:pointer; background:var(--white-ish); transition:transform .1s ease;
+  }
+  .cal-daycell:hover{ transform:translateY(-1px); }
+  .cal-daycell.empty{ border:none; background:transparent; cursor:default; }
+  .cal-daycell.libero{ background:rgba(85,96,63,0.14); border-color:var(--sage); }
+  .cal-daycell.occupato{ background:rgba(166,62,62,0.14); border-color:var(--wine); }
+  .cal-daycell.selected{ outline:2px solid var(--ink); outline-offset:-1px; }
+  .cal-daynum{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink); font-weight:600; }
+  .cal-luogo{ font-size:9px; color:var(--wine); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
+  .cal-legend{ display:flex; gap:18px; margin-top:14px; font-size:11.5px; color:var(--ink-soft); align-items:center; flex-wrap:wrap;}
+  .cal-legend .dot{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:middle;}
+
   @media print{
     *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important; }
     .sidebar, .topbar .role-toggle, #identityBadge, .subnav, .export-toolbar,
@@ -658,6 +694,7 @@
         <span class="role">Wedding Planner</span>
       </div>
     </div>
+    <button id="appModeToggleBtn" class="btn-mini" style="width:100%; margin-bottom:14px; text-align:center;" onclick="toggleAppMode()">📅 Disponibilità Fornitori</button>
     <div class="tab-list" id="tabList"></div>
     <button id="newWeddingBtn" class="tab-new" onclick="createNewWedding()">+ Nuovo matrimonio</button>
     <div class="sidebar-foot">
@@ -689,7 +726,7 @@
     </div>
 
     <nav class="subnav" id="subnav"></nav>
-    <div class="export-toolbar">
+    <div class="export-toolbar" id="exportToolbar">
       <span>Esporta questa scheda</span>
       <button onclick="window.print()">🖶 Stampa / PDF</button>
       <button onclick="exportCurrentToExcel()">Esporta Excel</button>
@@ -977,7 +1014,7 @@ if(weddings[0].guests.length){
   g[10].rsvp='declinato';
 }
 
-let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null };
+let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null };
 
 function fmtEuro(n){
   if(n===null || n===undefined) return '—';
@@ -2803,6 +2840,14 @@ function renderAll(){
     document.getElementById('content').innerHTML = renderLoginScreen();
     return;
   }
+  if(state.role==='planner' && state.appMode==='disponibilita'){
+    renderDisponibilitaScreen();
+    return;
+  }
+  // ripristina elementi eventualmente nascosti dalla vista Disponibilità Fornitori
+  const amb = document.getElementById('appModeToggleBtn');
+  if(amb){ amb.textContent = '📅 Disponibilità Fornitori'; amb.style.display = state.role==='planner' ? '' : 'none'; }
+  const et = document.getElementById('exportToolbar'); if(et) et.style.display = '';
   renderSidebar();
   renderHeader();
   renderSubnav();
@@ -2892,6 +2937,246 @@ async function loadAllWeddings(){
   } else if(HAS_STORAGE){
     for(const w of weddings){ await loadWedding(w); }
   }
+}
+
+// ============ DISPONIBILITÀ FORNITORI (database parallelo, indipendente dai matrimoni) ============
+const masterFornitori = [];
+
+async function loadMasterFornitori(){
+  if(!FIREBASE_READY) return;
+  try{
+    const snap = await db.collection('fornitoriGlobali').get();
+    masterFornitori.length = 0;
+    snap.forEach(doc=>{
+      const data = doc.data();
+      masterFornitori.push({ id: doc.id, nome: data.nome||'', categoria: data.categoria||'', contatto: data.contatto||'', calendario: data.calendario||{} });
+    });
+  }catch(e){ console.error('Errore caricamento fornitori globali', e); }
+}
+
+async function persistMasterFornitore(f){
+  if(!FIREBASE_READY) return;
+  try{
+    await db.collection('fornitoriGlobali').doc(f.id).set({ nome:f.nome, categoria:f.categoria, contatto:f.contatto||'', calendario:f.calendario||{} }, {merge:true});
+  }catch(e){ console.error('Errore salvataggio fornitore globale', e); }
+}
+
+function addMasterFornitore(){
+  const nome = prompt('Nome del fornitore (es. "Vanessa Ruggeri"):');
+  if(!nome) return;
+  const categoria = prompt('Categoria (es. Location, Fotografo, Make-up Artist):') || 'Altro';
+  let id = nome.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || ('fornitore-'+Date.now());
+  if(masterFornitori.find(f=>f.id===id)) id = id + '-' + Date.now();
+  const nuovo = { id, nome, categoria, contatto:'', calendario:{} };
+  masterFornitori.push(nuovo);
+  persistMasterFornitore(nuovo);
+  state.selectedMasterFornitore = id;
+  renderAll();
+}
+
+async function deleteMasterFornitore(id){
+  if(!confirm('Eliminare questo fornitore e tutto il suo calendario di disponibilità? Operazione non reversibile.')) return;
+  const idx = masterFornitori.findIndex(f=>f.id===id);
+  if(idx===-1) return;
+  masterFornitori.splice(idx,1);
+  if(FIREBASE_READY){ try{ await db.collection('fornitoriGlobali').doc(id).delete(); }catch(e){ console.error(e); } }
+  if(state.selectedMasterFornitore===id) state.selectedMasterFornitore = masterFornitori.length ? masterFornitori[0].id : null;
+  renderAll();
+}
+
+function updateMasterFornitoreField(id, field, value){
+  const f = masterFornitori.find(x=>x.id===id);
+  if(!f) return;
+  f[field] = value;
+  persistMasterFornitore(f);
+}
+
+async function toggleAppMode(){
+  state.appMode = state.appMode==='disponibilita' ? 'matrimoni' : 'disponibilita';
+  if(state.appMode==='disponibilita'){
+    if(!masterFornitori.length) await loadMasterFornitori();
+    if(!state.selectedMasterFornitore && masterFornitori.length) state.selectedMasterFornitore = masterFornitori[0].id;
+    if(!state.calendarMonth) state.calendarMonth = todayYM();
+  }
+  renderAll();
+  if(state.appMode==='matrimoni') renderSidebarFoot();
+}
+
+function todayYM(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+
+function selectMasterFornitore(id){
+  state.selectedMasterFornitore = id;
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+
+function shiftCalendarMonth(delta){
+  const [y,m] = state.calendarMonth.split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  state.calendarMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+function jumpToMonth(newMonth){
+  const [y] = state.calendarMonth.split('-').map(Number);
+  state.calendarMonth = y+'-'+String(parseInt(newMonth)).padStart(2,'0');
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+function jumpToYear(newYear){
+  const [,m] = state.calendarMonth.split('-').map(Number);
+  state.calendarMonth = newYear+'-'+String(m).padStart(2,'0');
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+
+function selectCalendarDay(dateStr){
+  state.calendarSelectedDay = dateStr;
+  renderAll();
+}
+
+function setGiornoStato(dateStr, stato){
+  const f = masterFornitori.find(x=>x.id===state.selectedMasterFornitore);
+  if(!f) return;
+  if(!f.calendario) f.calendario = {};
+  if(stato==='non-impostato'){
+    delete f.calendario[dateStr];
+  } else {
+    const esistente = f.calendario[dateStr] || {};
+    f.calendario[dateStr] = { stato, luogo: stato==='occupato' ? (esistente.luogo||'') : '' };
+  }
+  persistMasterFornitore(f);
+  renderAll();
+}
+
+function setGiornoLuogo(dateStr, luogo){
+  const f = masterFornitori.find(x=>x.id===state.selectedMasterFornitore);
+  if(!f || !f.calendario[dateStr]) return;
+  f.calendario[dateStr].luogo = luogo;
+  persistMasterFornitore(f);
+}
+
+function renderDisponibilitaScreen(){
+  document.getElementById('appModeToggleBtn').textContent = '← Torna ai matrimoni';
+  document.getElementById('newWeddingBtn').style.display = 'none';
+  document.getElementById('roleToggleWrap').style.display = 'none';
+  document.getElementById('identityBadge').style.display = 'none';
+  document.getElementById('subnav').innerHTML = '';
+  document.getElementById('exportToolbar').style.display = 'none';
+
+  const listEl = document.getElementById('tabList');
+  listEl.innerHTML = `
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px;">I tuoi fornitori</div>
+    ${masterFornitori.map(f=>`
+      <div class="mf-list-item ${f.id===state.selectedMasterFornitore?'active':''}" onclick="selectMasterFornitore('${f.id.replace(/'/g,"\\'")}')">
+        <span class="mf-cat">${f.categoria}</span>
+        <span class="mf-nome">${f.nome}</span>
+        <button class="mf-del" onclick="event.stopPropagation(); deleteMasterFornitore('${f.id.replace(/'/g,"\\'")}')">×</button>
+      </div>
+    `).join('')}
+    <button class="tab-new" style="margin-top:8px;" onclick="addMasterFornitore()">+ Aggiungi fornitore</button>
+  `;
+
+  document.getElementById('weddingHead').innerHTML = `
+    <div class="eyebrow">Database parallelo</div>
+    <h1>Disponibilità Fornitori</h1>
+    <div class="meta">Calendario libero/occupato per ogni fornitore con cui lavori, indipendente dai singoli matrimoni.</div>
+  `;
+
+  const content = document.getElementById('content');
+  if(!masterFornitori.length){
+    content.innerHTML = `<div class="empty-state">Nessun fornitore ancora inserito. Usa "+ Aggiungi fornitore" nella colonna a sinistra per iniziare.</div>`;
+    return;
+  }
+  const f = masterFornitori.find(x=>x.id===state.selectedMasterFornitore) || masterFornitori[0];
+  state.selectedMasterFornitore = f.id;
+
+  const [y,m] = state.calendarMonth.split('-').map(Number);
+  const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const primoGiorno = new Date(y, m-1, 1);
+  const giorniNelMese = new Date(y, m, 0).getDate();
+  let offset = primoGiorno.getDay()-1; if(offset<0) offset=6; // lunedì come primo giorno
+
+  let celle = '';
+  for(let i=0;i<offset;i++) celle += `<div class="cal-daycell empty"></div>`;
+  for(let d=1; d<=giorniNelMese; d++){
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const voce = f.calendario[dateStr];
+    const stato = voce ? voce.stato : '';
+    const selected = dateStr===state.calendarSelectedDay;
+    celle += `
+      <div class="cal-daycell ${stato} ${selected?'selected':''}" onclick="selectCalendarDay('${dateStr}')">
+        <span class="cal-daynum">${d}</span>
+        ${voce && voce.stato==='occupato' && voce.luogo ? `<span class="cal-luogo">${voce.luogo}</span>` : ''}
+      </div>
+    `;
+  }
+
+  let dettaglioGiorno = '';
+  if(state.calendarSelectedDay){
+    const voce = f.calendario[state.calendarSelectedDay] || {stato:'', luogo:''};
+    const [yy,mm,dd] = state.calendarSelectedDay.split('-');
+    dettaglioGiorno = `
+      <div class="fornitore-card" style="margin-top:18px;">
+        <h2 style="font-size:16px;">${dd}/${mm}/${yy}</h2>
+        <div style="display:flex; gap:10px; margin:12px 0; flex-wrap:wrap;">
+          <button class="btn-mini" style="background:${voce.stato==='libero'?'var(--sage)':'var(--white-ish)'}; color:${voce.stato==='libero'?'#fff':'var(--ink)'}; border-color:var(--sage);" onclick="setGiornoStato('${state.calendarSelectedDay}','libero')">✓ Segna come libero</button>
+          <button class="btn-mini" style="background:${voce.stato==='occupato'?'var(--wine)':'var(--white-ish)'}; color:${voce.stato==='occupato'?'#fff':'var(--ink)'}; border-color:var(--wine);" onclick="setGiornoStato('${state.calendarSelectedDay}','occupato')">✕ Segna come non disponibile</button>
+          ${voce.stato ? `<button class="btn-mini" onclick="setGiornoStato('${state.calendarSelectedDay}','non-impostato')">Rimuovi segnalazione</button>` : ''}
+        </div>
+        ${voce.stato==='occupato' ? `
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Luogo dell'impegno</label>
+          <input type="text" value="${voce.luogo||''}" placeholder="es. Villa dei Cedri — matrimonio Rossi" onchange="setGiornoLuogo('${state.calendarSelectedDay}',this.value)" style="width:100%; max-width:380px; padding:8px 10px; border:1px solid var(--rule); border-radius:6px;">
+        ` : ''}
+      </div>
+    `;
+  }
+
+  content.innerHTML = `
+    <div class="fornitore-card">
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+        <div style="flex:1; min-width:180px;">
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">Nome</label>
+          <input type="text" value="${f.nome}" onchange="updateMasterFornitoreField('${f.id}','nome',this.value)" style="width:100%; padding:8px 10px; border:1px solid var(--rule); border-radius:6px; font-family:'Arcon',sans-serif; font-weight:600; font-size:16px;">
+        </div>
+        <div style="flex:1; min-width:160px;">
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">Categoria</label>
+          <input type="text" value="${f.categoria}" onchange="updateMasterFornitoreField('${f.id}','categoria',this.value)" style="width:100%; padding:8px 10px; border:1px solid var(--rule); border-radius:6px;">
+        </div>
+        <div style="flex:1; min-width:160px;">
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">Contatto</label>
+          <input type="text" value="${f.contatto||''}" placeholder="telefono o email" onchange="updateMasterFornitoreField('${f.id}','contatto',this.value)" style="width:100%; padding:8px 10px; border:1px solid var(--rule); border-radius:6px;">
+        </div>
+      </div>
+
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="shiftCalendarMonth(-1)">‹</button>
+        <h2>${mesiNomi[m-1]} ${y}</h2>
+        <button class="cal-nav-btn" onclick="shiftCalendarMonth(1)">›</button>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:center; margin-bottom:16px;">
+        <select onchange="jumpToMonth(this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; font-size:12.5px;">
+          ${mesiNomi.map((nomeMese,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${nomeMese}</option>`).join('')}
+        </select>
+        <select onchange="jumpToYear(this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; font-size:12.5px;">
+          ${(()=>{ const oggi=new Date().getFullYear(); let opts=''; for(let yy=oggi-1; yy<=oggi+5; yy++){ opts+=`<option value="${yy}" ${yy===y?'selected':''}>${yy}</option>`; } return opts; })()}
+        </select>
+      </div>
+      <div class="cal-grid">
+        <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div><div class="cal-dow">Gio</div><div class="cal-dow">Ven</div><div class="cal-dow">Sab</div><div class="cal-dow">Dom</div>
+        ${celle}
+      </div>
+      <div class="cal-legend">
+        <span><span class="dot" style="background:var(--sage);"></span>Libero</span>
+        <span><span class="dot" style="background:var(--wine);"></span>Non disponibile</span>
+        <span><span class="dot" style="background:var(--white-ish); border:1px solid var(--rule);"></span>Non impostato</span>
+      </div>
+      ${dettaglioGiorno}
+    </div>
+  `;
 }
 
 function resolveIdentity(email){
@@ -3024,6 +3309,7 @@ function renderSidebarFoot(){
     const isPlanner = identity && identity.role==='planner';
     const nb = document.getElementById('newWeddingBtn'); if(nb) nb.style.display = isPlanner ? '' : 'none';
     const rb = document.getElementById('resetDataBtn'); if(rb) rb.style.display = isPlanner ? '' : 'none';
+    const amb = document.getElementById('appModeToggleBtn'); if(amb && state.appMode!=='disponibilita') amb.style.display = isPlanner ? '' : 'none';
   }
   if(!el) return;
   if(FIREBASE_READY && currentUser && identity){
