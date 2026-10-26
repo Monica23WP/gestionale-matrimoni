@@ -1369,11 +1369,14 @@ function renderFornitoreProfiloView(){
     dettaglioGiorno = `
       <div class="fornitore-card" style="margin-top:18px;">
         <h2 style="font-size:16px;">${dd}/${mm}/${yy}</h2>
-        <div style="display:flex; gap:10px; margin:12px 0; flex-wrap:wrap;">
-          <button class="btn-mini" style="background:${voce.stato==='libero'?'var(--sage)':'var(--white-ish)'}; color:${voce.stato==='libero'?'#fff':'var(--ink)'}; border-color:var(--sage);" onclick="setGiornoStato('${state.calendarSelectedDay}','libero')">✓ Segna come libero</button>
-          <button class="btn-mini" style="background:${voce.stato==='occupato'?'var(--wine)':'var(--white-ish)'}; color:${voce.stato==='occupato'?'#fff':'var(--ink)'}; border-color:var(--wine);" onclick="setGiornoStato('${state.calendarSelectedDay}','occupato')">✕ Segna come non disponibile</button>
-          <button class="btn-mini" style="background:${voce.stato==='incognita'?'var(--gold)':'var(--white-ish)'}; color:var(--ink); border-color:var(--gold);" onclick="setGiornoStato('${state.calendarSelectedDay}','incognita')">? In attesa di risposta</button>
-          ${voce.stato ? `<button class="btn-mini" onclick="setGiornoStato('${state.calendarSelectedDay}','non-impostato')">Rimuovi segnalazione</button>` : ''}
+        <div style="margin:12px 0;">
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Stato di questo giorno</label>
+          <select onchange="setGiornoStato('${state.calendarSelectedDay}', this.value)" style="width:100%; max-width:300px; padding:9px 10px; border:1px solid var(--rule); border-radius:8px; font-size:13.5px; font-weight:600;">
+            <option value="libero" ${(!voce.stato || voce.stato==='libero')?'selected':''}>✓ Libero</option>
+            <option value="occupato" ${voce.stato==='occupato'?'selected':''}>✕ Non disponibile</option>
+            <option value="incognita" ${voce.stato==='incognita'?'selected':''}>? In attesa di risposta</option>
+            ${voce.stato ? `<option value="non-impostato">↺ Rimuovi segnalazione</option>` : ''}
+          </select>
         </div>
         ${voce.stato==='occupato' ? `
           <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Luogo dell'impegno</label>
@@ -1401,7 +1404,9 @@ function renderFornitoreProfiloView(){
         <select onchange="jumpToYear(this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; font-size:12.5px;">
           ${(()=>{ const oggi=new Date().getFullYear(); let opts=''; for(let yy=oggi-1; yy<=oggi+5; yy++){ opts+=`<option value="${yy}" ${yy===y?'selected':''}>${yy}</option>`; } return opts; })()}
         </select>
+        <button class="btn-mini" style="font-size:11.5px;" onclick="segnaMeseLibero()">✓ Segna tutto il mese come libero</button>
       </div>
+      <div class="floorplan-hint">Ogni giorno è già considerato libero finché non lo segni diversamente — questo pulsante serve solo se vuoi lasciare una segnalazione esplicita e scritta per ogni giorno del mese.</div>
       <div class="cal-grid">
         <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div><div class="cal-dow">Gio</div><div class="cal-dow">Ven</div><div class="cal-dow">Sab</div><div class="cal-dow">Dom</div>
         ${celle}
@@ -3525,6 +3530,20 @@ function todayYM(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 }
+function segnaMeseLibero(){
+  const f = masterFornitori.find(x=>x.id===state.selectedMasterFornitore);
+  if(!f) return;
+  if(!confirm('Segnare come "Libero" tutti i giorni di questo mese che non hanno ancora una segnalazione? Le date già segnate (occupato/in attesa) restano invariate.')) return;
+  if(!f.calendario) f.calendario = {};
+  const [y,m] = state.calendarMonth.split('-').map(Number);
+  const giorniNelMese = new Date(y, m, 0).getDate();
+  for(let d=1; d<=giorniNelMese; d++){
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(!f.calendario[dateStr]) f.calendario[dateStr] = {stato:'libero', luogo:''};
+  }
+  persistMasterFornitore(f);
+  renderAll();
+}
 function calDayLabel(voce){
   const stato = voce ? voce.stato : 'libero';
   if(stato==='occupato') return 'Occupato' + (voce && voce.luogo ? ' — ' + voce.luogo : '');
@@ -3660,11 +3679,14 @@ function renderDisponibilitaScreen(){
     dettaglioGiorno = `
       <div class="fornitore-card" style="margin-top:18px;">
         <h2 style="font-size:16px;">${dd}/${mm}/${yy}</h2>
-        <div style="display:flex; gap:10px; margin:12px 0; flex-wrap:wrap;">
-          <button class="btn-mini" style="background:${voce.stato==='libero'?'var(--sage)':'var(--white-ish)'}; color:${voce.stato==='libero'?'#fff':'var(--ink)'}; border-color:var(--sage);" onclick="setGiornoStato('${state.calendarSelectedDay}','libero')">✓ Segna come libero</button>
-          <button class="btn-mini" style="background:${voce.stato==='occupato'?'var(--wine)':'var(--white-ish)'}; color:${voce.stato==='occupato'?'#fff':'var(--ink)'}; border-color:var(--wine);" onclick="setGiornoStato('${state.calendarSelectedDay}','occupato')">✕ Segna come non disponibile</button>
-          <button class="btn-mini" style="background:${voce.stato==='incognita'?'var(--gold)':'var(--white-ish)'}; color:var(--ink); border-color:var(--gold);" onclick="setGiornoStato('${state.calendarSelectedDay}','incognita')">? In attesa di risposta</button>
-          ${voce.stato ? `<button class="btn-mini" onclick="setGiornoStato('${state.calendarSelectedDay}','non-impostato')">Rimuovi segnalazione</button>` : ''}
+        <div style="margin:12px 0;">
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Stato di questo giorno</label>
+          <select onchange="setGiornoStato('${state.calendarSelectedDay}', this.value)" style="width:100%; max-width:300px; padding:9px 10px; border:1px solid var(--rule); border-radius:8px; font-size:13.5px; font-weight:600;">
+            <option value="libero" ${(!voce.stato || voce.stato==='libero')?'selected':''}>✓ Libero</option>
+            <option value="occupato" ${voce.stato==='occupato'?'selected':''}>✕ Non disponibile</option>
+            <option value="incognita" ${voce.stato==='incognita'?'selected':''}>? In attesa di risposta</option>
+            ${voce.stato ? `<option value="non-impostato">↺ Rimuovi segnalazione</option>` : ''}
+          </select>
         </div>
         ${voce.stato==='occupato' ? `
           <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Luogo dell'impegno</label>
@@ -3704,7 +3726,9 @@ function renderDisponibilitaScreen(){
         <select onchange="jumpToYear(this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; font-size:12.5px;">
           ${(()=>{ const oggi=new Date().getFullYear(); let opts=''; for(let yy=oggi-1; yy<=oggi+5; yy++){ opts+=`<option value="${yy}" ${yy===y?'selected':''}>${yy}</option>`; } return opts; })()}
         </select>
+        <button class="btn-mini" style="font-size:11.5px;" onclick="segnaMeseLibero()">✓ Segna tutto il mese come libero</button>
       </div>
+      <div class="floorplan-hint">Ogni giorno è già considerato libero finché non lo segni diversamente — questo pulsante serve solo se vuoi lasciare una segnalazione esplicita e scritta per ogni giorno del mese.</div>
       <div class="cal-grid">
         <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div><div class="cal-dow">Gio</div><div class="cal-dow">Ven</div><div class="cal-dow">Sab</div><div class="cal-dow">Dom</div>
         ${celle}
