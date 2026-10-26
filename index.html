@@ -1357,7 +1357,7 @@ function renderFornitoreProfiloView(){
     celle += `
       <div class="cal-daycell ${stato} ${selected?'selected':''}" onclick="selectCalendarDay('${dateStr}')">
         <span class="cal-daynum">${d}</span>
-        ${voce && voce.stato==='occupato' && voce.luogo ? `<span class="cal-luogo">${voce.luogo}</span>` : ''}
+        <span class="cal-luogo">${calDayLabel(voce)}</span>
       </div>
     `;
   }
@@ -3525,6 +3525,12 @@ function todayYM(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 }
+function calDayLabel(voce){
+  const stato = voce ? voce.stato : 'libero';
+  if(stato==='occupato') return 'Occupato' + (voce && voce.luogo ? ' — ' + voce.luogo : '');
+  if(stato==='incognita') return 'In attesa';
+  return 'Disponibile';
+}
 
 function selectMasterFornitore(id){
   state.selectedMasterFornitore = id;
@@ -3642,7 +3648,7 @@ function renderDisponibilitaScreen(){
     celle += `
       <div class="cal-daycell ${stato} ${selected?'selected':''}" onclick="selectCalendarDay('${dateStr}')">
         <span class="cal-daynum">${d}</span>
-        ${voce && voce.stato==='occupato' && voce.luogo ? `<span class="cal-luogo">${voce.luogo}</span>` : ''}
+        <span class="cal-luogo">${calDayLabel(voce)}</span>
       </div>
     `;
   }
