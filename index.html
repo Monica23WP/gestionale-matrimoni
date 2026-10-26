@@ -1290,11 +1290,12 @@ function renderHomeScreen(){
     <div class="floorplan-hint" style="margin-top:14px;">"Fornitore" e "Sposi" aprono un'anteprima di come vedono loro l'app — tu resti comunque connessa come Wedding Planner.</div>
   `;
 
+  const logoSrc = document.querySelector('.brand img') ? document.querySelector('.brand img').src : '';
   const content = document.getElementById('content');
   content.innerHTML = `
     <div style="max-width:680px; margin:64px auto 40px auto; text-align:center;">
-      <div class="maiolica-strip" style="width:220px; margin:0 auto 28px auto;"></div>
-      <div style="font-family:'Arcon',sans-serif; font-size:25px; color:var(--ink); line-height:1.5; margin-bottom:56px; font-weight:400;">
+      <img src="${logoSrc}" alt="Monica Coppolino" style="width:74px; height:74px; margin:0 auto 26px auto; display:block;">
+      <div style="font-family:'Arcon',sans-serif; font-size:24px; color:var(--ink); line-height:1.55; margin-bottom:56px; font-weight:400; letter-spacing:0.01em;">
         "Vivere a Passu Lentu è una filosofia,<br>non una moda."
       </div>
 
