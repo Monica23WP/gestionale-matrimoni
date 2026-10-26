@@ -3221,7 +3221,7 @@ function renderAll(){
   }
   // ripristina elementi eventualmente nascosti dalla vista Disponibilità Fornitori / Home
   const amb = document.getElementById('appModeToggleBtn');
-  if(amb){ amb.textContent = '📅 Disponibilità Fornitori'; amb.style.display = (state.role==='planner' && !state.isPreview) ? '' : 'none'; }
+  if(amb){ amb.textContent = '📅 Disponibilità Fornitori'; amb.onclick = toggleAppMode; amb.style.display = (state.role==='planner' && !state.isPreview) ? '' : 'none'; }
   const et = document.getElementById('exportToolbar'); if(et) et.style.display = '';
   const nwb = document.getElementById('newWeddingBtn'); if(nwb && state.isPreview) nwb.style.display='none';
   renderSidebar();
@@ -3579,7 +3579,10 @@ function setGiornoLuogo(dateStr, luogo){
 }
 
 function renderDisponibilitaScreen(){
-  document.getElementById('appModeToggleBtn').textContent = '← Torna ai matrimoni';
+  const amb = document.getElementById('appModeToggleBtn');
+  amb.textContent = '← Torna alla Home';
+  amb.style.display = '';
+  amb.onclick = goHome;
   document.getElementById('newWeddingBtn').style.display = 'none';
   document.getElementById('roleToggleWrap').style.display = 'none';
   document.getElementById('identityBadge').style.display = 'none';
