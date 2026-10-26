@@ -1014,7 +1014,7 @@ if(weddings[0].guests.length){
   g[10].rsvp='declinato';
 }
 
-let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null };
+let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null, isPreview:false, homeExpand:null };
 
 function fmtEuro(n){
   if(n===null || n===undefined) return '—';
@@ -1191,20 +1191,202 @@ function sendReminderEmail(catNome, sgNome, idx, sIdx, tipo){
   window.open(mailto, '_blank');
 }
 
+const PLANNER_SECTIONS = [['budget','Budget'],['fornitori','Fornitori'],['schede','Timeline & Schede Fornitori'],['timelinegenerale','Timeline Generale'],['elencotimeline','Elenco Timeline'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
+
+function sectionsForRole(role, w){
+  if(role==='planner') return PLANNER_SECTIONS;
+  if(role==='sposi'){
+    const tabs = [['ospiti','Lista Invitati'],['budget','Budget'],['pagamenti','Pagamenti']];
+    if(w.sposiCanSeeDesign) tabs.push(['moodboard','Grafica & Moodboard']);
+    return tabs;
+  }
+  return [['fornitore','La mia scheda']]; // la vista fornitore non ha sotto-sezioni
+}
+function renderSectionMenuHtml(role, w){
+  return sectionsForRole(role, w).map(([id,label])=>{
+    const isFornitore = role==='fornitore';
+    const active = isFornitore || state.subtab===id;
+    return `
+      <div class="tab ${active?'active':''}" ${isFornitore?'style="cursor:default;"':`onclick="setSubtab('${id}')"`}>
+        <span class="names" style="font-size:13.5px;">${label}</span>
+      </div>
+    `;
+  }).join('');
+}
+
 function renderSidebar(){
   const list = document.getElementById('tabList');
-  const canSwitch = !(FIREBASE_READY && identity && identity.role!=='planner');
-  const visible = canSwitch ? weddings.map((w,i)=>({w,i})) : [{w:weddings[state.weddingIndex], i:state.weddingIndex}];
-  list.innerHTML = visible.map(({w,i})=>`
-    <div class="tab ${i===state.weddingIndex?'active':''}" style="${canSwitch?'':'cursor:default;'} position:relative;">
-      <div ${canSwitch?`onclick="selectWedding(${i})"`:''}>
-        <span class="num">0${i+1}</span>
-        <span class="names">${w.names}</span>
-        <span class="date">${w.date} · ${w.location}</span>
+
+  // Anteprima (planner che guarda come Fornitore/Sposi): selettore matrimonio + uscita anteprima + sezioni di quel ruolo
+  if(state.isPreview){
+    const w = currentWedding();
+    list.innerHTML = `
+      <button class="tab-new" style="margin-bottom:14px; background:var(--gold); border-color:var(--gold); color:var(--ink); font-weight:600;" onclick="exitPreview()">✕ Esci dall'anteprima</button>
+      <div style="padding:2px 6px 12px 6px;">
+        <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:4px;">Anteprima come</div>
+        <div style="font-family:'Arcon',sans-serif; font-weight:600; font-size:17px; color:var(--ink);">${state.role==='fornitore'?'Fornitore':'Sposi'}</div>
       </div>
-      ${canSwitch ? `<button onclick="event.stopPropagation(); deleteWedding('${w.id.replace(/'/g,"\\'")}')" title="Elimina questo matrimonio" style="position:absolute; top:6px; right:8px; border:none; background:none; color:var(--wine); cursor:pointer; font-size:13px; line-height:1;">×</button>` : ''}
+      <div style="padding:0 6px 14px 6px;">
+        <label style="font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:4px;">Matrimonio da vedere</label>
+        <select onchange="previewSelectWedding(this.value)" style="width:100%; padding:7px 8px; border:1px solid var(--rule); border-radius:6px;">
+          ${weddings.map((w2,i)=>`<option value="${i}" ${i===state.weddingIndex?'selected':''}>${w2.names}</option>`).join('')}
+        </select>
+      </div>
+      <div style="padding:0 6px 6px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">Sezioni visibili a loro</div>
+      ${renderSectionMenuHtml(state.role, w)}
+    `;
+    return;
+  }
+
+  // Planner dentro un matrimonio: menù verticale delle sezioni, al posto dell'elenco matrimoni
+  if(state.role==='planner'){
+    const w = currentWedding();
+    list.innerHTML = `
+      <button class="tab-new" style="margin-bottom:14px;" onclick="goHome()">← Home</button>
+      <div style="padding:2px 6px 14px 6px;">
+        <div style="font-family:'Arcon',sans-serif; font-weight:600; font-size:16px; color:var(--ink); line-height:1.25;">${w.names}</div>
+        <div style="font-size:11px; color:var(--ink-soft); margin-top:3px;">${w.date}</div>
+      </div>
+      ${renderSectionMenuHtml('planner', w)}
+    `;
+    return;
+  }
+
+  // Fornitore/sposi con login reale: solo il proprio matrimonio + le sezioni a cui hanno accesso loro
+  const w = weddings[state.weddingIndex];
+  list.innerHTML = `
+    <div class="tab active" style="cursor:default; margin-bottom:10px;">
+      <span class="num">Il tuo matrimonio</span>
+      <span class="names">${w.names}</span>
+      <span class="date">${w.date} · ${w.location}</span>
     </div>
-  `).join('');
+    ${renderSectionMenuHtml(state.role, w)}
+  `;
+}
+
+// ============ HOME SCREEN (schermata iniziale, privacy by default) ============
+function renderHomeScreen(){
+  document.getElementById('appModeToggleBtn').style.display = 'none';
+  document.getElementById('newWeddingBtn').style.display = 'none';
+  document.getElementById('roleToggleWrap').style.display = 'none';
+  document.getElementById('identityBadge').style.display = 'none';
+  document.getElementById('subnav').innerHTML = '';
+  document.getElementById('exportToolbar').style.display = 'none';
+  document.getElementById('weddingHead').innerHTML = '';
+
+  const list = document.getElementById('tabList');
+  const ruoli = [
+    {id:'planner', label:'Wedding Planner'},
+    {id:'fornitore', label:'Fornitore'},
+    {id:'sposi', label:'Sposi'}
+  ];
+  list.innerHTML = `
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:10px;">Accedi come</div>
+    ${ruoli.map(r=>`
+      <div class="tab" onclick="enterRoleView('${r.id}')">
+        <span class="names">${r.label}</span>
+      </div>
+    `).join('')}
+    <div class="floorplan-hint" style="margin-top:14px;">"Fornitore" e "Sposi" aprono un'anteprima di come vedono loro l'app — tu resti comunque connessa come Wedding Planner.</div>
+  `;
+
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div style="max-width:680px; margin:64px auto 40px auto; text-align:center;">
+      <div class="maiolica-strip" style="width:220px; margin:0 auto 28px auto;"></div>
+      <div style="font-family:'Arcon',sans-serif; font-size:25px; color:var(--ink); line-height:1.5; margin-bottom:56px; font-weight:400;">
+        "Vivere a Passu Lentu è una filosofia,<br>non una moda."
+      </div>
+
+      <div onclick="toggleHomeExpand('matrimoni')" style="cursor:pointer; background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:18px 24px; margin-bottom:14px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-family:'Arcon',sans-serif; font-weight:600; font-size:17px; color:var(--ink);">I tuoi matrimoni</div>
+          <div style="font-size:12px; color:var(--ink-soft); margin-top:2px;">${weddings.length} in gestione</div>
+        </div>
+        <span style="font-size:20px; color:var(--ink-soft);">${state.homeExpand==='matrimoni'?'−':'+'}</span>
+      </div>
+      ${state.homeExpand==='matrimoni' ? `
+        <div style="text-align:left; margin:-6px 0 20px 0; border:1px solid var(--rule); border-top:none; border-radius:0 0 12px 12px; overflow:hidden;">
+          ${weddings.map((w,i)=>`
+            <div onclick="enterWedding(${i})" style="cursor:pointer; padding:13px 22px; border-bottom:1px dashed var(--rule); background:var(--white-ish); display:flex; justify-content:space-between; align-items:center;">
+              <div><span style="font-family:'Arcon',sans-serif; font-weight:600; font-size:14.5px; color:var(--ink);">${w.names}</span>
+              <span style="font-size:12px; color:var(--ink-soft); margin-left:10px;">${w.date}</span></div>
+              <button onclick="event.stopPropagation(); deleteWedding('${w.id.replace(/'/g,"\\'")}')" style="border:none; background:none; color:var(--wine); cursor:pointer; font-size:14px;" title="Elimina">×</button>
+            </div>
+          `).join('')}
+          <div onclick="createNewWedding()" style="cursor:pointer; padding:13px 22px; background:var(--white-ish); color:var(--ink-soft); font-size:13px;">+ Nuovo matrimonio</div>
+        </div>
+      ` : ''}
+
+      <div onclick="toggleHomeExpand('fornitori')" style="cursor:pointer; background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:18px 24px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-family:'Arcon',sans-serif; font-weight:600; font-size:17px; color:var(--ink);">Disponibilità Fornitori</div>
+          <div style="font-size:12px; color:var(--ink-soft); margin-top:2px;">${masterFornitori.length} fornitori censiti</div>
+        </div>
+        <span style="font-size:20px; color:var(--ink-soft);">${state.homeExpand==='fornitori'?'−':'+'}</span>
+      </div>
+      ${state.homeExpand==='fornitori' ? renderFornitoriPreviewList() : ''}
+    </div>
+  `;
+}
+
+function renderFornitoriPreviewList(){
+  if(!masterFornitori.length){
+    return `<div style="text-align:left; margin:-6px 0 20px 0; border:1px solid var(--rule); border-top:none; border-radius:0 0 12px 12px; padding:16px 22px; color:var(--ink-soft); font-size:13px; background:var(--white-ish);">Nessun fornitore censito ancora.</div>`;
+  }
+  const groups = {};
+  masterFornitori.forEach(f=>{ (groups[f.categoria] ||= []).push(f); });
+  return `
+    <div style="text-align:left; margin:-6px 0 20px 0; border:1px solid var(--rule); border-top:none; border-radius:0 0 12px 12px; overflow:hidden; background:var(--white-ish);">
+      ${Object.entries(groups).map(([cat,list])=>`
+        <div style="padding:10px 22px 4px 22px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); font-weight:600;">${cat}</div>
+        ${list.map(f=>`
+          <div onclick="enterFornitoreCalendar('${f.id.replace(/'/g,"\\'")}')" style="cursor:pointer; padding:9px 22px; border-bottom:1px dashed var(--rule);">
+            <span style="font-family:'Arcon',sans-serif; font-weight:600; font-size:14px; color:var(--ink);">${f.nome}</span>
+          </div>
+        `).join('')}
+      `).join('')}
+    </div>
+  `;
+}
+
+function toggleHomeExpand(which){
+  state.homeExpand = state.homeExpand===which ? null : which;
+  renderAll();
+}
+function goHome(){
+  state.appMode='home'; state.role='planner'; state.isPreview=false;
+  renderAll();
+}
+function exitPreview(){
+  state.isPreview=false; state.role='planner'; state.appMode='home';
+  renderAll();
+}
+function enterWedding(i){
+  state.appMode='matrimoni'; state.role='planner'; state.isPreview=false;
+  state.weddingIndex=i; state.subtab='budget';
+  renderAll();
+}
+async function enterFornitoreCalendar(id){
+  state.appMode='disponibilita';
+  state.selectedMasterFornitore=id;
+  if(!state.calendarMonth) state.calendarMonth=todayYM();
+  renderAll();
+}
+function enterRoleView(roleId){
+  if(roleId==='planner'){
+    state.appMode='matrimoni'; state.role='planner'; state.isPreview=false; state.subtab='budget';
+  } else {
+    state.role=roleId; state.isPreview=true; state.appMode='matrimoni';
+    if(roleId==='sposi'){ state.subtab='ospiti'; state.guestSubtab='principale'; }
+    else { state.supplierRef=null; }
+  }
+  renderAll();
+}
+function previewSelectWedding(i){
+  state.weddingIndex = parseInt(i);
+  state.supplierRef = null;
+  renderAll();
 }
 
 async function deleteWedding(id){
@@ -1250,8 +1432,9 @@ function onRoleChange(){
 function renderHeader(){
   const w = currentWedding();
   const head = document.getElementById('weddingHead');
+  const previewBanner = state.isPreview ? `<div style="background:var(--gold); color:var(--ink); padding:7px 14px; border-radius:8px; font-size:12px; font-weight:600; margin-bottom:12px; display:inline-block;">👁 ANTEPRIMA — stai vedendo l'app come ${state.role==='fornitore'?'Fornitore':'Sposi'}</div>` : '';
   if(state.role==='planner'){
-    head.innerHTML = `
+    head.innerHTML = previewBanner + `
       <div class="eyebrow">Matrimonio</div>
       <input type="text" value="${w.names}" onchange="updateWeddingField('names',this.value)" style="font-family:'Arcon',sans-serif; font-weight:700; font-size:26px; color:var(--ink); border:1px solid transparent; border-radius:6px; padding:2px 4px; background:transparent; width:100%; max-width:420px;" onfocus="this.style.borderColor='var(--rule)'" onblur="this.style.borderColor='transparent'">
       <div class="meta" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;">
@@ -1263,7 +1446,7 @@ function renderHeader(){
       </div>
     `;
   } else {
-    head.innerHTML = `
+    head.innerHTML = previewBanner + `
       <div class="eyebrow">Matrimonio</div>
       <h1>${w.names}</h1>
       <div class="meta"><b>${w.date}</b> · ${w.location} · Chiesa: ${w.chiesa}</div>
@@ -1277,22 +1460,8 @@ function updateWeddingField(field, value){
 }
 
 function renderSubnav(){
-  const nav = document.getElementById('subnav');
-  if(state.role==='planner'){
-    const tabs = [['budget','Budget'],['fornitori','Fornitori'],['schede','Timeline & Schede Fornitori'],['timelinegenerale','Timeline Generale'],['elencotimeline','Elenco Timeline'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
-    nav.innerHTML = tabs.map(([id,label])=>`
-      <button class="${state.subtab===id?'active':''}" onclick="setSubtab('${id}')">${label}</button>
-    `).join('');
-  } else if(state.role==='sposi'){
-    const w = currentWedding();
-    const sposiTabs = [['ospiti','Lista Invitati'],['budget','Budget'],['pagamenti','Pagamenti']];
-    if(w.sposiCanSeeDesign) sposiTabs.push(['moodboard','Grafica & Moodboard']);
-    nav.innerHTML = sposiTabs.map(([id,label])=>`
-      <button class="${state.subtab===id?'active':''}" onclick="setSubtab('${id}')">${label}</button>
-    `).join('');
-  } else {
-    nav.innerHTML = `<button class="active">La mia scheda</button>`;
-  }
+  // Tutte le sezioni (planner, sposi, fornitore) sono ora nel menù verticale in sidebar (renderSidebar).
+  document.getElementById('subnav').innerHTML = '';
 }
 
 function setSubtab(id){ state.subtab = id; renderContent(); renderSubnav(); }
@@ -1668,7 +1837,7 @@ function renderFornitoreView(w){
   const supplierNames = [...new Set(w.fornitori.map(f=>f.ref))];
   if(!state.supplierRef && supplierNames.length) state.supplierRef = supplierNames[0];
 
-  const selectHtml = FIREBASE_READY ? '' : `
+  const selectHtml = (FIREBASE_READY && !state.isPreview) ? '' : `
     <div class="supplier-select-wrap">
       <label>Accedi come</label>
       <select onchange="setSupplier(this.value)">
@@ -2844,10 +3013,15 @@ function renderAll(){
     renderDisponibilitaScreen();
     return;
   }
-  // ripristina elementi eventualmente nascosti dalla vista Disponibilità Fornitori
+  if(state.role==='planner' && state.appMode==='home' && !state.isPreview){
+    renderHomeScreen();
+    return;
+  }
+  // ripristina elementi eventualmente nascosti dalla vista Disponibilità Fornitori / Home
   const amb = document.getElementById('appModeToggleBtn');
-  if(amb){ amb.textContent = '📅 Disponibilità Fornitori'; amb.style.display = state.role==='planner' ? '' : 'none'; }
+  if(amb){ amb.textContent = '📅 Disponibilità Fornitori'; amb.style.display = (state.role==='planner' && !state.isPreview) ? '' : 'none'; }
   const et = document.getElementById('exportToolbar'); if(et) et.style.display = '';
+  const nwb = document.getElementById('newWeddingBtn'); if(nwb && state.isPreview) nwb.style.display='none';
   renderSidebar();
   renderHeader();
   renderSubnav();
@@ -2887,6 +3061,7 @@ if(FIREBASE_READY){
     accessLogged = false;
     if(user){
       await loadAllWeddings();
+      await loadMasterFornitori();
       identity = resolveIdentity(user.email);
       if(!identity){
         document.getElementById('loadingOverlay') && (document.getElementById('loadingOverlay').style.display='none');
@@ -2992,14 +3167,14 @@ function updateMasterFornitoreField(id, field, value){
 }
 
 async function toggleAppMode(){
-  state.appMode = state.appMode==='disponibilita' ? 'matrimoni' : 'disponibilita';
+  state.appMode = state.appMode==='disponibilita' ? 'home' : 'disponibilita';
   if(state.appMode==='disponibilita'){
     if(!masterFornitori.length) await loadMasterFornitori();
     if(!state.selectedMasterFornitore && masterFornitori.length) state.selectedMasterFornitore = masterFornitori[0].id;
     if(!state.calendarMonth) state.calendarMonth = todayYM();
   }
   renderAll();
-  if(state.appMode==='matrimoni') renderSidebarFoot();
+  if(state.appMode!=='disponibilita') renderSidebarFoot();
 }
 
 function todayYM(){
@@ -3195,6 +3370,8 @@ function applyIdentity(id){
   state.role = id.role;
   if(id.role==='planner'){
     state.subtab='budget';
+    state.appMode='home';
+    state.isPreview=false;
   } else if(id.role==='fornitore'){
     state.weddingIndex = id.weddingIndex;
     state.supplierRef = id.supplierRef;
@@ -3309,7 +3486,7 @@ function renderSidebarFoot(){
     const isPlanner = identity && identity.role==='planner';
     const nb = document.getElementById('newWeddingBtn'); if(nb) nb.style.display = isPlanner ? '' : 'none';
     const rb = document.getElementById('resetDataBtn'); if(rb) rb.style.display = isPlanner ? '' : 'none';
-    const amb = document.getElementById('appModeToggleBtn'); if(amb && state.appMode!=='disponibilita') amb.style.display = isPlanner ? '' : 'none';
+    const amb = document.getElementById('appModeToggleBtn'); if(amb && state.appMode!=='disponibilita' && state.appMode!=='home') amb.style.display = isPlanner ? '' : 'none';
   }
   if(!el) return;
   if(FIREBASE_READY && currentUser && identity){
