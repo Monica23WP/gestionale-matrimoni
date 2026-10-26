@@ -632,6 +632,10 @@
   .cal-daycell.empty{ border:none; background:transparent; cursor:default; }
   .cal-daycell.libero{ background:rgba(85,96,63,0.14); border-color:var(--sage); }
   .cal-daycell.occupato{ background:rgba(166,62,62,0.14); border-color:var(--wine); }
+  .cal-daycell.parziale{ background:rgba(238,181,73,0.2); border-color:var(--gold); }
+  .mf-check-item{ display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:7px; cursor:pointer; }
+  .mf-check-item:hover{ background:var(--paper); }
+  .mf-check-cat{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:10px 6px 2px 6px; }
   .cal-daycell.selected{ outline:2px solid var(--ink); outline-offset:-1px; }
   .cal-daynum{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink); font-weight:600; }
   .cal-luogo{ font-size:9px; color:var(--wine); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
@@ -1014,7 +1018,7 @@ if(weddings[0].guests.length){
   g[10].rsvp='declinato';
 }
 
-let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null, isPreview:false, homeExpand:null };
+let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null, isPreview:false, homeExpand:null, dispoView:'calendario', comparazioneSelected:[], comparazioneMonth:null };
 
 function fmtEuro(n){
   if(n===null || n===undefined) return '—';
@@ -3256,11 +3260,21 @@ function renderDisponibilitaScreen(){
     <button class="tab-new" style="margin-top:8px;" onclick="addMasterFornitore()">+ Aggiungi fornitore</button>
   `;
 
+  if(!state.dispoView) state.dispoView = 'calendario';
   document.getElementById('weddingHead').innerHTML = `
     <div class="eyebrow">Database parallelo</div>
     <h1>Disponibilità Fornitori</h1>
     <div class="meta">Calendario libero/occupato per ogni fornitore con cui lavori, indipendente dai singoli matrimoni.</div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button class="btn-mini" style="background:${state.dispoView==='calendario'?'var(--ink)':'var(--white-ish)'}; color:${state.dispoView==='calendario'?'var(--white-ish)':'var(--ink)'};" onclick="setDispoView('calendario')">📅 Calendario singolo</button>
+      <button class="btn-mini" style="background:${state.dispoView==='comparazioni'?'var(--ink)':'var(--white-ish)'}; color:${state.dispoView==='comparazioni'?'var(--white-ish)':'var(--ink)'};" onclick="setDispoView('comparazioni')">⚖ Comparazioni</button>
+    </div>
   `;
+
+  if(state.dispoView==='comparazioni'){
+    renderComparazioniView();
+    return;
+  }
 
   const content = document.getElementById('content');
   if(!masterFornitori.length){
@@ -3349,6 +3363,158 @@ function renderDisponibilitaScreen(){
         <span><span class="dot" style="background:var(--sage);"></span>Libero</span>
         <span><span class="dot" style="background:var(--wine);"></span>Non disponibile</span>
         <span><span class="dot" style="background:var(--white-ish); border:1px solid var(--rule);"></span>Non impostato</span>
+      </div>
+      ${dettaglioGiorno}
+    </div>
+  `;
+}
+
+function setDispoView(view){
+  state.dispoView = view;
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+
+function toggleComparazioneFornitore(id, checked){
+  if(!state.comparazioneSelected) state.comparazioneSelected = [];
+  if(checked){
+    if(!state.comparazioneSelected.includes(id)) state.comparazioneSelected.push(id);
+  } else {
+    state.comparazioneSelected = state.comparazioneSelected.filter(x=>x!==id);
+  }
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+
+function shiftComparazioneMonth(delta){
+  const [y,m] = state.comparazioneMonth.split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  state.comparazioneMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+function jumpComparazioneMonth(v){
+  const [y] = state.comparazioneMonth.split('-').map(Number);
+  state.comparazioneMonth = y+'-'+String(parseInt(v)).padStart(2,'0');
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+function jumpComparazioneYear(v){
+  const [,m] = state.comparazioneMonth.split('-').map(Number);
+  state.comparazioneMonth = v+'-'+String(m).padStart(2,'0');
+  state.calendarSelectedDay = null;
+  renderAll();
+}
+function selectComparazioneDay(dateStr){
+  state.calendarSelectedDay = dateStr;
+  renderAll();
+}
+
+function renderComparazioniView(){
+  if(!state.comparazioneSelected) state.comparazioneSelected = [];
+  if(!state.comparazioneMonth) state.comparazioneMonth = todayYM();
+
+  const listEl = document.getElementById('tabList');
+  const groups = {};
+  masterFornitori.forEach(f=>{ (groups[f.categoria] ||= []).push(f); });
+  listEl.innerHTML = `
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px;">Seleziona da confrontare</div>
+    ${Object.entries(groups).map(([cat,list])=>`
+      <div class="mf-check-cat">${cat}</div>
+      ${list.map(f=>`
+        <label class="mf-check-item">
+          <input type="checkbox" ${state.comparazioneSelected.includes(f.id)?'checked':''} onchange="toggleComparazioneFornitore('${f.id.replace(/'/g,"\\'")}',this.checked)">
+          <span style="font-size:13px; color:var(--ink);">${f.nome}</span>
+        </label>
+      `).join('')}
+    `).join('')}
+  `;
+
+  const content = document.getElementById('content');
+  if(masterFornitori.length < 2){
+    content.innerHTML = `<div class="empty-state">Servono almeno due fornitori per fare una comparazione. Aggiungine altri dalla vista "Calendario singolo".</div>`;
+    return;
+  }
+  if(state.comparazioneSelected.length < 2){
+    content.innerHTML = `<div class="empty-state">Seleziona almeno due fornitori dalla colonna a sinistra per vedere le date in cui coincidono.</div>`;
+    return;
+  }
+
+  const selezionati = masterFornitori.filter(f=>state.comparazioneSelected.includes(f.id));
+  const [y,m] = state.comparazioneMonth.split('-').map(Number);
+  const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const primoGiorno = new Date(y, m-1, 1);
+  const giorniNelMese = new Date(y, m, 0).getDate();
+  let offset = primoGiorno.getDay()-1; if(offset<0) offset=6;
+
+  function statoGiorno(dateStr){
+    let tuttiLiberi = true, qualcunoIgnoto = false;
+    for(const f of selezionati){
+      const v = f.calendario[dateStr];
+      if(v && v.stato==='occupato') return 'occupato';
+      if(!v || v.stato!=='libero'){ tuttiLiberi = false; qualcunoIgnoto = true; }
+    }
+    return tuttiLiberi ? 'libero' : (qualcunoIgnoto ? 'parziale' : '');
+  }
+
+  let celle = '';
+  for(let i=0;i<offset;i++) celle += `<div class="cal-daycell empty"></div>`;
+  for(let d=1; d<=giorniNelMese; d++){
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const stato = statoGiorno(dateStr);
+    const selected = dateStr===state.calendarSelectedDay;
+    celle += `
+      <div class="cal-daycell ${stato} ${selected?'selected':''}" onclick="selectComparazioneDay('${dateStr}')">
+        <span class="cal-daynum">${d}</span>
+      </div>
+    `;
+  }
+
+  let dettaglioGiorno = '';
+  if(state.calendarSelectedDay){
+    const [yy,mm,dd] = state.calendarSelectedDay.split('-');
+    dettaglioGiorno = `
+      <div class="fornitore-card" style="margin-top:18px;">
+        <h2 style="font-size:16px;">${dd}/${mm}/${yy}</h2>
+        <table style="margin-top:10px;">
+          <thead><tr><th>Fornitore</th><th>Stato</th><th>Luogo (se occupato)</th></tr></thead>
+          <tbody>
+            ${selezionati.map(f=>{
+              const v = f.calendario[state.calendarSelectedDay];
+              const statoLabel = v ? (v.stato==='libero'?'Libero':'Non disponibile') : 'Non impostato';
+              const stampClass = v && v.stato==='libero' ? 'saldato' : (v && v.stato==='occupato' ? 'aperto' : 'omaggio');
+              return `<tr><td>${f.nome}</td><td><span class="stamp ${stampClass}">${statoLabel}</span></td><td>${v && v.stato==='occupato' ? (v.luogo||'—') : '—'}</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  content.innerHTML = `
+    <div class="fornitore-card">
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:10px;">In confronto: ${selezionati.map(f=>f.nome).join(', ')}</div>
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="shiftComparazioneMonth(-1)">‹</button>
+        <h2>${mesiNomi[m-1]} ${y}</h2>
+        <button class="cal-nav-btn" onclick="shiftComparazioneMonth(1)">›</button>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:center; margin-bottom:16px;">
+        <select onchange="jumpComparazioneMonth(this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; font-size:12.5px;">
+          ${mesiNomi.map((nomeMese,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${nomeMese}</option>`).join('')}
+        </select>
+        <select onchange="jumpComparazioneYear(this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; font-size:12.5px;">
+          ${(()=>{ const oggi=new Date().getFullYear(); let opts=''; for(let yy=oggi-1; yy<=oggi+5; yy++){ opts+=`<option value="${yy}" ${yy===y?'selected':''}>${yy}</option>`; } return opts; })()}
+        </select>
+      </div>
+      <div class="cal-grid">
+        <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div><div class="cal-dow">Gio</div><div class="cal-dow">Ven</div><div class="cal-dow">Sab</div><div class="cal-dow">Dom</div>
+        ${celle}
+      </div>
+      <div class="cal-legend">
+        <span><span class="dot" style="background:var(--sage);"></span>Tutti liberi</span>
+        <span><span class="dot" style="background:var(--wine);"></span>Almeno uno occupato</span>
+        <span><span class="dot" style="background:var(--gold);"></span>Da verificare (risposta mancante)</span>
       </div>
       ${dettaglioGiorno}
     </div>
