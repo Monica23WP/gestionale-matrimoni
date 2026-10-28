@@ -1024,7 +1024,7 @@ if(weddings[0].guests.length){
   g[10].rsvp='declinato';
 }
 
-let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null, isPreview:false, homeExpand:null, dispoView:'calendario', comparazioneSelected:[], comparazioneMonth:null, fornitoreMasterId:null, fornitoreAssignments:[], fornitoreView:null, guestVetrinaSelected:[] };
+let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null, isPreview:false, homeExpand:null, dispoView:'calendario', comparazioneSelected:[], comparazioneMonth:null, fornitoreMasterId:null, fornitoreAssignments:[], fornitoreView:null, guestVetrinaSelected:[], vetrinaMonth:null };
 
 function fmtEuro(n){
   if(n===null || n===undefined) return '—';
@@ -1319,10 +1319,19 @@ function renderVetrinaFornitori(w){
   if(!combinati.length){
     return `<div class="empty-state">La wedding planner non ha ancora condiviso nessun fornitore con voi in questa sezione.</div>`;
   }
+  if(!state.vetrinaMonth) state.vetrinaMonth = todayYM();
+  const [vy,vm] = state.vetrinaMonth.split('-').map(Number);
+  const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
   const groups = {};
   combinati.forEach(f=>{ (groups[f.categoria||'Altro'] ||= []).push(f); });
   return `
-    <div class="criterio-note">Una selezione di fornitori di fiducia scelti per voi dalla vostra wedding planner.</div>
+    <div class="criterio-note">Una selezione di fornitori di fiducia scelti per voi dalla vostra wedding planner. Il calendario mostra la loro disponibilità, in sola visualizzazione.</div>
+    <div class="cal-header" style="max-width:320px;">
+      <button class="cal-nav-btn" onclick="shiftVetrinaMonth(-1)">‹</button>
+      <h2 style="font-size:16px;">${mesiNomi[vm-1]} ${vy}</h2>
+      <button class="cal-nav-btn" onclick="shiftVetrinaMonth(1)">›</button>
+    </div>
     ${Object.entries(groups).map(([cat,list])=>`
       <div class="cat-block">
         <div class="cat-title"><h3>${cat}</h3></div>
@@ -1348,10 +1357,50 @@ function renderVetrinaFornitori(w){
                 ${f.foto.map(foto=>`<img src="${foto}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; border:1px solid var(--rule);">`).join('')}
               </div>
             ` : (f._soloEssenziale ? '' : `<div class="floorplan-hint" style="margin-top:10px;">Nessuna foto caricata ancora.</div>`)}
+            ${f.calendario ? `
+              <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:16px 0 6px 0;">Disponibilità</div>
+              ${renderReadOnlyMiniCalendar(f.calendario, vy, vm)}
+            ` : ''}
           </div>
         `).join('')}
       </div>
     `).join('')}
+  `;
+}
+
+function shiftVetrinaMonth(delta){
+  const [y,m] = state.vetrinaMonth.split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  state.vetrinaMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  renderContent();
+}
+
+function renderReadOnlyMiniCalendar(calendario, y, m){
+  const primoGiorno = new Date(y, m-1, 1);
+  const giorniNelMese = new Date(y, m, 0).getDate();
+  let offset = primoGiorno.getDay()-1; if(offset<0) offset=6;
+  let celle = '';
+  for(let i=0;i<offset;i++) celle += `<div class="cal-daycell empty"></div>`;
+  for(let d=1; d<=giorniNelMese; d++){
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const voce = calendario[dateStr];
+    const stato = voce ? voce.stato : 'libero';
+    celle += `
+      <div class="cal-daycell ${stato}" style="cursor:default; min-height:44px;">
+        <span class="cal-daynum">${d}</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="cal-grid">
+      <div class="cal-dow">Lun</div><div class="cal-dow">Mar</div><div class="cal-dow">Mer</div><div class="cal-dow">Gio</div><div class="cal-dow">Ven</div><div class="cal-dow">Sab</div><div class="cal-dow">Dom</div>
+      ${celle}
+    </div>
+    <div class="cal-legend">
+      <span><span class="dot" style="background:var(--sage);"></span>Libero</span>
+      <span><span class="dot" style="background:var(--wine);"></span>Non disponibile</span>
+      <span><span class="dot" style="background:var(--gold);"></span>In attesa di risposta</span>
+    </div>
   `;
 }
 
