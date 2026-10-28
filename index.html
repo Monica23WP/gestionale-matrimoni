@@ -1334,6 +1334,14 @@ function renderVetrinaFornitori(w){
       <h2 style="font-size:16px;">${mesiNomi[vm-1]} ${vy}</h2>
       <button class="cal-nav-btn" onclick="shiftVetrinaMonth(1)">›</button>
     </div>
+    <div style="display:flex; gap:8px; margin-bottom:18px;">
+      <select onchange="jumpVetrinaMonth(this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; font-size:12.5px;">
+        ${mesiNomi.map((nomeMese,i)=>`<option value="${i+1}" ${i+1===vm?'selected':''}>${nomeMese}</option>`).join('')}
+      </select>
+      <select onchange="jumpVetrinaYear(this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; font-size:12.5px;">
+        ${(()=>{ const oggi=new Date().getFullYear(); let opts=''; for(let yy=oggi-1; yy<=oggi+5; yy++){ opts+=`<option value="${yy}" ${yy===vy?'selected':''}>${yy}</option>`; } return opts; })()}
+      </select>
+    </div>
     ${Object.entries(groups).map(([cat,list])=>`
       <div class="cat-block">
         <div class="cat-title"><h3>${cat}</h3></div>
@@ -1375,6 +1383,16 @@ function shiftVetrinaMonth(delta){
   const [y,m] = state.vetrinaMonth.split('-').map(Number);
   const d = new Date(y, m-1+delta, 1);
   state.vetrinaMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  renderContent();
+}
+function jumpVetrinaMonth(v){
+  const [y] = state.vetrinaMonth.split('-').map(Number);
+  state.vetrinaMonth = y+'-'+String(parseInt(v)).padStart(2,'0');
+  renderContent();
+}
+function jumpVetrinaYear(v){
+  const [,m] = state.vetrinaMonth.split('-').map(Number);
+  state.vetrinaMonth = v+'-'+String(m).padStart(2,'0');
   renderContent();
 }
 
