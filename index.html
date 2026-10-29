@@ -981,13 +981,19 @@ const weddings = [
   }
 ];
 
-// Normalizzazione: canale RSVP, email di accesso fornitori/sposi, campi rsvp/transfer per ogni ospite
-weddings.forEach(w=>{
+// Normalizzazione: canale RSVP, email di accesso fornitori/sposi, campi rsvp/transfer per ogni ospite.
+// Chiamata su OGNI matrimonio ogni volta che viene caricato o creato — mai solo una tantum — così un campo
+// aggiunto in futuro non lascia mai "indietro" i matrimoni già esistenti o quelli nuovi caricati da Firestore.
+function normalizeWedding(w){
   if(!w.rsvpChannel) w.rsvpChannel = {tipo:'', valore:''};
   if(w.sposiEmail===undefined) w.sposiEmail = '';
   if(w.sposiCanSeeDesign===undefined) w.sposiCanSeeDesign = false;
   if(w.sposiFornitoriVisibili===undefined) w.sposiFornitoriVisibili = [];
   if(!w.emergencyContacts) w.emergencyContacts = [{label:'', numero:''},{label:'', numero:''}];
+  if(!w.categorie) w.categorie = [];
+  if(!w.fornitori) w.fornitori = [];
+  if(!w.guests) w.guests = [];
+  if(!w.tasks) w.tasks = {};
   (w.fornitori||[]).forEach(f=>{
     if(f.email===undefined) f.email='';
     if(!f.telefoni) f.telefoni = [];
@@ -1000,12 +1006,12 @@ weddings.forEach(w=>{
     if(!g.transferHC) g.transferHC = {data:'', ora:''};
     if(!g.transferCR) g.transferCR = {data:'', ora:''};
   });
-  if(w.moodboard && w.moodboard.floorplan){
-    const fp = w.moodboard.floorplan;
-    if(fp.referenceImage===undefined) fp.referenceImage = null;
-    if(fp.dxfEntities===undefined) fp.dxfEntities = null;
-    if(fp.dxfBounds===undefined) fp.dxfBounds = null;
-  }
+  if(!w.moodboard) w.moodboard = { palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} };
+  if(!w.moodboard.floorplan) w.moodboard.floorplan = {zones:[], stations:[], tables:0, staffTable:''};
+  const fp = w.moodboard.floorplan;
+  if(fp.referenceImage===undefined) fp.referenceImage = null;
+  if(fp.dxfEntities===undefined) fp.dxfEntities = null;
+  if(fp.dxfBounds===undefined) fp.dxfBounds = null;
   (w.categorie||[]).forEach(cat=>{
     const allVoci = cat.sottogruppi ? cat.sottogruppi.flatMap(sg=>sg.voci) : cat.voci;
     allVoci.forEach(v=>{
@@ -1013,7 +1019,8 @@ weddings.forEach(w=>{
       if(v.ivaFlag===undefined) v.ivaFlag = true; // mantiene il comportamento di calcolo già in uso finora
     });
   });
-});
+}
+weddings.forEach(normalizeWedding);
 // Alcuni esempi compilati per mostrare come apparirebbe una lista già iniziata dagli sposi
 if(weddings[0].guests.length){
   weddings[0].rsvpChannel = {tipo:'whatsapp', valore:''};
@@ -1048,6 +1055,7 @@ function createNewWedding(){
     tasks:{}, rsvpChannel:{tipo:'', valore:''}, sposiEmail:'', sposiCanSeeDesign:false,
     emergencyContacts:[{label:'',numero:''},{label:'',numero:''}]
   };
+  normalizeWedding(nuovo);
   weddings.push(nuovo);
   state.weddingIndex = weddings.length-1;
   state.subtab='budget';
@@ -2184,13 +2192,27 @@ function setSupplier(name){ state.supplierRef = name; renderContent(); }
 function setSchedeSupplier(ref){ state.schedeSupplier = ref; renderContent(); }
 
 function renderElencoTimeline(w){
-  const refs = Object.keys(w.tasks||{}).filter(ref => (w.tasks[ref]||[]).length>0).sort((a,b)=>a.localeCompare(b,'it'));
-  if(!refs.length) return `<div class="empty-state">Ancora nessuna timeline creata. Man mano che aggiungi orari a un fornitore in "Timeline & Schede Fornitori", il suo nome comparirà qui.</div>`;
+  // elenco dei fornitori con una timeline: quelli con già voci + tutti gli altri fornitori del matrimonio
+  // (così puoi scegliere dalla tendina anche un fornitore che non ha ancora nessuna voce, per iniziare ad aggiungerne)
+  const refsConVoci = Object.keys(w.tasks||{}).filter(ref => (w.tasks[ref]||[]).length>0);
+  const tuttiRefs = (w.fornitori||[]).map(f=>f.ref);
+  const refs = [...new Set([...refsConVoci, ...tuttiRefs])].sort((a,b)=>a.localeCompare(b,'it'));
+  if(!refs.length) return `<div class="empty-state">Nessun fornitore ancora registrato per questo matrimonio.</div>`;
   if(!state.elencoTimelineSelected || !refs.includes(state.elencoTimelineSelected)) state.elencoTimelineSelected = refs[0];
   const sel = state.elencoTimelineSelected;
   const fornitore = (w.fornitori||[]).find(f=>f.ref===sel);
-  const tasks = w.tasks[sel] || [];
+  if(!w.tasks[sel]) w.tasks[sel] = [];
+  const tasks = w.tasks[sel];
   return `
+    <div class="supplier-select-wrap" style="margin-bottom:16px;">
+      <label>Fornitore</label>
+      <select onchange="selectElencoTimeline(this.value)">
+        ${refs.map(ref=>{
+          const f = (w.fornitori||[]).find(x=>x.ref===ref);
+          return `<option value="${ref}" ${ref===sel?'selected':''}>${f?f.nome+' — ':''}${ref}</option>`;
+        }).join('')}
+      </select>
+    </div>
     <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
       <div style="min-width:220px;">
         <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px;">Fornitori con timeline</div>
@@ -2207,16 +2229,32 @@ function renderElencoTimeline(w){
         <div class="fornitore-card">
           <h2>${sel}</h2>
           ${fornitore ? `<div class="cat">${fornitore.cat} · ${fornitore.nome}</div>` : ''}
-          ${tasks.map(t=>`
-            <div class="task-row">
-              <div class="task-time">${t.t}</div>
-              <div class="task-text">${t.d}</div>
+          ${tasks.length ? tasks.map((t,i)=>`
+            <div class="task-row" style="align-items:center;">
+              <input type="text" value="${t.t}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'t',this.value)" style="width:80px; border:1px solid var(--rule); border-radius:6px; padding:5px 6px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;">
+              <input type="text" value="${t.d}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'d',this.value)" style="flex:1; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:13px;">
+              <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${sel.replace(/'/g,"\\'")}',${i})">rimuovi</button>
             </div>
-          `).join('')}
+          `).join('') : `<div class="empty-state" style="margin-bottom:10px;">Nessuna voce di timeline ancora inserita per questo fornitore.</div>`}
+          <div class="add-row" style="margin-top:10px;">
+            <input type="text" id="newTaskTimeElenco" placeholder="Orario (es. 17:30)" style="width:110px;">
+            <input type="text" id="newTaskDescElenco" placeholder="Cosa deve fare il fornitore">
+            <button onclick="addTimelineRowElenco('${sel.replace(/'/g,"\\'")}')">+ Aggiungi voce timeline</button>
+          </div>
         </div>
       </div>
     </div>
   `;
+}
+function addTimelineRowElenco(ref){
+  const t = document.getElementById('newTaskTimeElenco').value.trim();
+  const d = document.getElementById('newTaskDescElenco').value.trim();
+  if(!t || !d){ alert('Servono sia orario che descrizione.'); return; }
+  const w = currentWedding();
+  if(!w.tasks[ref]) w.tasks[ref] = [];
+  w.tasks[ref].push({t, d});
+  persistWedding(w);
+  renderContent();
 }
 function selectElencoTimeline(ref){
   state.elencoTimelineSelected = ref;
@@ -2311,11 +2349,24 @@ function renderSchedeFornitori(w){
           <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${f.ref}',${i})">rimuovi</button>
         </div>
       `).join('') : `<div class="empty-state" style="margin-bottom:10px;">Nessuna voce di timeline ancora inserita per questo fornitore.</div>`}
-      <div class="add-row" style="margin-top:10px;">
+      <div class="add-row" style="margin-top:10px; align-items:flex-start;">
         <input type="text" id="newTaskTime" placeholder="Orario (es. 17:30)" style="width:110px;">
         <input type="text" id="newTaskDesc" placeholder="Cosa deve fare il fornitore">
-        <button onclick="addTimelineRow('${f.ref}')">+ Aggiungi voce timeline</button>
+        <button onclick="addTimelineRow('${f.ref}', getTimelineCopyTargets())">+ Aggiungi voce timeline</button>
       </div>
+      ${w.fornitori.length>1 ? `
+        <div class="criterio-note" style="margin-top:10px;">
+          <b>Copia anche su altri fornitori</b> (facoltativo): spunta chi deve ricevere la stessa voce, oltre a ${f.ref}.
+          <div id="timelineCopyTargets" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+            ${w.fornitori.filter(x=>x.ref!==f.ref).map(x=>`
+              <label style="display:flex; align-items:center; gap:6px; background:var(--white-ish); border:1px solid var(--rule); border-radius:20px; padding:5px 12px 5px 8px; cursor:pointer; font-size:12.5px;">
+                <input type="checkbox" value="${x.ref.replace(/"/g,'&quot;')}">
+                ${x.nome} <span style="color:var(--ink-soft); font-size:10.5px;">(${x.ref})</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
     </div>
   `;
 
@@ -2333,7 +2384,7 @@ function addFornitore(){
   }
   if(!ref) ref = nome;
   const w = currentWedding();
-  w.fornitori.push({cat, nome, ref, email, contattato:false, prenotato:false, note:'', schedaTecnica:[]});
+  w.fornitori.push({cat, nome, ref, email, contattato:false, prenotato:false, note:'', schedaTecnica:[], telefoni:[], visibileSposi:false, masterLinkId:null});
   w.tasks[ref] = w.tasks[ref] || [];
   persistWedding(w);
   renderContent();
@@ -2404,13 +2455,22 @@ function removeSchedaCampo(ref, idx){
   f.schedaTecnica.splice(idx,1);
   renderContent();
 }
-function addTimelineRow(ref){
+function getTimelineCopyTargets(){
+  const box = document.getElementById('timelineCopyTargets');
+  if(!box) return [];
+  return [...box.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.value);
+}
+function addTimelineRow(ref, extraRefs){
   const t = document.getElementById('newTaskTime').value.trim();
   const d = document.getElementById('newTaskDesc').value.trim();
   if(!d) return;
   const w = currentWedding();
-  if(!w.tasks[ref]) w.tasks[ref] = [];
-  w.tasks[ref].push({t: t || '—', d});
+  const destinatari = [ref, ...(extraRefs||[])];
+  destinatari.forEach(r=>{
+    if(!w.tasks[r]) w.tasks[r] = [];
+    w.tasks[r].push({t: t || '—', d});
+  });
+  persistWedding(w);
   renderContent();
 }
 function updateTimelineRow(ref, idx, field, value){
@@ -2419,6 +2479,7 @@ function updateTimelineRow(ref, idx, field, value){
 }
 function removeTimelineRow(ref, idx){
   currentWedding().tasks[ref].splice(idx,1);
+  persistWedding(currentWedding());
   renderContent();
 }
 
@@ -2482,7 +2543,7 @@ function renderPrincipale(w, guests){
       <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
         ${masterFornitori.length ? masterFornitori.map(f=>`
           <label style="display:flex; align-items:center; gap:6px; background:var(--white-ish); border:1px solid var(--rule); border-radius:20px; padding:5px 12px 5px 8px; cursor:pointer; font-size:12.5px;">
-            <input type="checkbox" ${w.sposiFornitoriVisibili.includes(f.id)?'checked':''} onchange="toggleSposiFornitoreVisibile('${f.id.replace(/'/g,"\\'")}',this.checked)">
+            <input type="checkbox" ${(w.sposiFornitoriVisibili||[]).includes(f.id)?'checked':''} onchange="toggleSposiFornitoreVisibile('${f.id.replace(/'/g,"\\'")}',this.checked)">
             ${f.nome} <span style="color:var(--ink-soft); font-size:10.5px;">(${f.categoria})</span>
           </label>
         `).join('') : `<span style="color:var(--ink-soft); font-size:12.5px;">Nessun fornitore ancora censito in "Disponibilità Fornitori".</span>`}
@@ -3426,6 +3487,7 @@ async function loadAllWeddings(){
         }
         const data = doc.data();
         PERSIST_FIELDS.forEach(k=>{ if(data[k]!==undefined) w[k] = data[k]; });
+        normalizeWedding(w);
       });
       // i matrimoni di partenza che non hanno ancora un documento proprio su Firestore: li creiamo ora
       for(const w of weddings){
@@ -4253,31 +4315,55 @@ function renderTimelineGenerale(w){
     const fornitore = (w.fornitori||[]).find(f=>f.ref===ref);
     const cat = fornitore ? fornitore.cat : 'Altro';
     (w.tasks[ref]||[]).forEach((t,idx)=>{
-      rows.push({ref, cat, t: t.t, d: t.d, key: ref+'|'+idx});
+      rows.push({ref, cat, t: t.t, d: t.d, idx, key: ref+'|'+idx});
     });
   });
-  if(!rows.length) return renderEmergencyBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessun fornitore. Vai su "Timeline & Schede Fornitori" per aggiungerne.</div>`;
   if(!state.timelineExclude) state.timelineExclude = new Set();
   rows.sort((a,b)=> a.cat.localeCompare(b.cat, 'it') || timeSortKey(a.t)-timeSortKey(b.t));
+  const formAggiunta = `
+    <div class="add-row" style="margin-top:14px; flex-wrap:wrap;">
+      <select id="tgFornitoreSel" style="padding:7px 9px; border:1px solid var(--rule); border-radius:6px;">
+        ${(w.fornitori||[]).map(f=>`<option value="${f.ref}">${f.nome} — ${f.ref}</option>`).join('')}
+      </select>
+      <input type="text" id="tgOrario" placeholder="Orario (es. 17:30)" style="width:110px;">
+      <input type="text" id="tgAttivita" placeholder="Attività">
+      <button onclick="addTimelineRowGenerale()">+ Aggiungi voce</button>
+    </div>
+  `;
+  if(!rows.length) return renderEmergencyBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessun fornitore.</div>` + (w.fornitori.length ? formAggiunta : '');
   return renderEmergencyBlock(w, true) + `
     <div class="criterio-note">
-      Tutti gli orari di tutti i fornitori, raggruppati in ordine alfabetico per categoria fornitore e, dentro ogni categoria, in ordine di orario. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
+      Tutti gli orari di tutti i fornitori, raggruppati in ordine alfabetico per categoria fornitore e, dentro ogni categoria, in ordine di orario. Clicca su orario o attività per modificarli direttamente da qui. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
     </div>
     <table>
-      <thead><tr><th style="width:36px"></th><th>Categoria</th><th>Orario</th><th>Fornitore</th><th>Attività</th></tr></thead>
+      <thead><tr><th style="width:36px"></th><th>Categoria</th><th>Orario</th><th>Fornitore</th><th>Attività</th><th></th></tr></thead>
       <tbody>
         ${rows.map(r=>`
           <tr data-include="${state.timelineExclude.has(r.key)?'0':'1'}">
             <td><input type="checkbox" ${state.timelineExclude.has(r.key)?'':'checked'} onchange="toggleTimelineRow('${r.key.replace(/'/g,"\\'")}',this.checked)"></td>
             <td class="inc-label">${r.cat}</td>
-            <td class="inc-label" style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--wine);">${r.t}</td>
+            <td><input type="text" value="${r.t}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'t',this.value)" style="width:76px; border:1px solid var(--rule); border-radius:6px; padding:4px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;"></td>
             <td class="inc-label">${r.ref}</td>
-            <td class="inc-label">${r.d}</td>
+            <td><input type="text" value="${r.d}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'d',this.value)" style="width:100%; min-width:180px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:13px;"></td>
+            <td><button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx})">rimuovi</button></td>
           </tr>
         `).join('')}
       </tbody>
     </table>
+    ${formAggiunta}
   `;
+}
+function addTimelineRowGenerale(){
+  const ref = document.getElementById('tgFornitoreSel').value;
+  const t = document.getElementById('tgOrario').value.trim();
+  const d = document.getElementById('tgAttivita').value.trim();
+  if(!ref){ alert('Seleziona un fornitore.'); return; }
+  if(!t || !d){ alert('Servono sia orario che attività.'); return; }
+  const w = currentWedding();
+  if(!w.tasks[ref]) w.tasks[ref] = [];
+  w.tasks[ref].push({t, d});
+  persistWedding(w);
+  renderContent();
 }
 function toggleTimelineRow(key, checked){
   if(!state.timelineExclude) state.timelineExclude = new Set();
