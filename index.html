@@ -493,7 +493,7 @@
     display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:14px; font-size:11.5px; color:var(--ink-soft);
   }
   .floorplan-legend span b{ color:var(--ink); }
-  .floorplan-hint{ font-size:11px; color:var(--ink-soft); margin-top:8px; font-style:italic;}
+  .floorplan-hint{ display:none; }
 
   /* ============ LISTA INVITATI ============ */
   .menutag{
@@ -552,10 +552,10 @@
     display:inline-flex; align-items:center; justify-content:center;
     font-size:11px;
   }
-  .criterio-note{
-    font-size:12px; color:var(--ink-soft); font-style:italic;
-    background:var(--paper); border:1px dashed var(--rule); border-radius:8px;
-    padding:10px 14px; margin-bottom:18px; line-height:1.5;
+  .criterio-note{ display:none; }
+  .controls-box{
+    background:var(--paper); border:1px solid var(--rule); border-radius:8px;
+    padding:12px 14px; margin-bottom:18px;
   }
   .guest-form{
     display:grid;
@@ -1936,14 +1936,10 @@ function renderContent(){
         <div><label>Email di accesso</label><input type="email" id="nfEmail" placeholder="opzionale"></div>
         <div class="submit-cell"><button class="btn-mini" onclick="addFornitore()">+ Aggiungi fornitore</button></div>
       </div>
-      <div class="floorplan-hint">Mentre scrivi in "Macrocategoria" o "Microcategoria" ti comparirà un suggerimento con quelle già usate in questo matrimonio — sceglilo dalla lista per essere certa di finire nello stesso gruppo, invece di crearne uno nuovo per un refuso (es. "Location" vs "location").</div>
-      <div class="criterio-note" style="margin-top:10px;">
-        <b>Scorciatoie:</b> aggiungi sposa, sposo o una persona del team Wedding Planner come fornitori veri e propri — stessa scheda completa (note, telefono, orari), senza dover scrivere tu la macro/microcategoria.
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button class="btn-mini" onclick="quickAddFornitore('Sposi','Sposa')">+ Aggiungi Sposa</button>
-          <button class="btn-mini" onclick="quickAddFornitore('Sposi','Sposo')">+ Aggiungi Sposo</button>
-          <button class="btn-mini" onclick="quickAddFornitoreTeam()">+ Aggiungi persona Team Wedding Planner</button>
-        </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+        <button class="btn-mini" onclick="quickAddFornitore('Sposi','Sposa')">+ Aggiungi Sposa</button>
+        <button class="btn-mini" onclick="quickAddFornitore('Sposi','Sposo')">+ Aggiungi Sposo</button>
+        <button class="btn-mini" onclick="quickAddFornitoreTeam()">+ Aggiungi persona Team Wedding Planner</button>
       </div>
     `;
     if(!w.fornitori.length){ c.innerHTML = addFornitoreForm + `<div class="empty-state">Nessun fornitore ancora registrato per questo matrimonio.</div>`; return; }
@@ -2287,15 +2283,13 @@ function renderSchedeFornitori(w){
     <div class="fornitore-card">
       <h2>${f.ref}</h2>
       <div class="cat">${f.cat} · ${f.nome}</div>
-      <div class="criterio-note" style="margin-bottom:16px;">
-        <b>Email di accesso:</b> questa è l'email con cui il fornitore effettuerà il login sul sito (deve corrispondere a un utente creato in Firebase Authentication).
-        <div style="margin-top:8px;">
-          <input type="email" value="${f.email||''}" placeholder="es. lamimosa@fiori.it" onchange="updateFornitoreField('${f.ref}','email',this.value)" style="width:100%; max-width:320px; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--white-ish);">
-        </div>
+      <div class="controls-box">
+        <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Email di accesso</label>
+        <input type="email" value="${f.email||''}" placeholder="es. lamimosa@fiori.it" onchange="updateFornitoreField('${f.ref}','email',this.value)" style="width:100%; max-width:320px; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--white-ish);">
       </div>
-      <div class="criterio-note" style="margin-bottom:16px;">
-        <b>Numeri di cellulare</b>
-        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+      <div class="controls-box">
+        <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Numeri di cellulare</label>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
           ${(f.telefoni||[]).map((tel,tIdx)=>`
             <span style="display:inline-flex; align-items:center; gap:6px; background:var(--paper); border:1px solid var(--rule); border-radius:20px; padding:5px 6px 5px 12px; font-family:'IBM Plex Mono',monospace; font-size:12.5px;">
               ${tel}
@@ -2359,9 +2353,9 @@ function renderSchedeFornitori(w){
         <button onclick="addTimelineRow('${f.ref}', getTimelineCopyTargets())">+ Aggiungi voce timeline</button>
       </div>
       ${w.fornitori.length>1 ? `
-        <div class="criterio-note" style="margin-top:10px;">
-          <b>Copia anche su altri fornitori</b> (facoltativo): spunta chi deve ricevere la stessa voce, oltre a ${f.ref}.
-          <div id="timelineCopyTargets" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+        <div class="controls-box" style="margin-top:10px;">
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Copia anche su altri fornitori</label>
+          <div id="timelineCopyTargets" style="display:flex; flex-wrap:wrap; gap:6px;">
             ${w.fornitori.filter(x=>x.ref!==f.ref).map(x=>`
               <label style="display:flex; align-items:center; gap:6px; background:var(--white-ish); border:1px solid var(--rule); border-radius:20px; padding:5px 12px 5px 8px; cursor:pointer; font-size:12.5px;">
                 <input type="checkbox" value="${x.ref.replace(/"/g,'&quot;')}">
@@ -2545,8 +2539,8 @@ function renderGuestList(w){
 function renderPrincipale(w, guests){
   const ch = w.rsvpChannel || {tipo:'', valore:''};
   const rsvpBox = `
-    <div class="criterio-note" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
-      <div><b>Canale RSVP degli sposi:</b> ${ch.valore ? `${ch.tipo==='whatsapp'?'WhatsApp':'Email'} — ${ch.valore}` : 'non ancora fornito dagli sposi'}</div>
+    <div class="controls-box" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">Canale RSVP</label>
       <select id="rsvpTipo" style="padding:4px 8px; border-radius:6px; border:1px solid var(--rule)">
         <option value="whatsapp" ${ch.tipo==='whatsapp'?'selected':''}>WhatsApp</option>
         <option value="email" ${ch.tipo==='email'?'selected':''}>Email</option>
@@ -2555,20 +2549,20 @@ function renderPrincipale(w, guests){
       <button class="btn-mini" onclick="saveRsvpChannel()">Salva canale RSVP</button>
     </div>
     ${state.role==='planner' ? `
-    <div class="criterio-note" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
-      <div><b>Email di accesso sposi:</b> l'account con cui la coppia farà il login sul sito (deve corrispondere a un utente creato in Firebase Authentication).</div>
+    <div class="controls-box" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);">Email di accesso sposi</label>
       <input type="email" id="sposiEmailInput" placeholder="es. alessandroevaleria@gmail.com" value="${w.sposiEmail||''}" style="padding:6px 8px; border-radius:6px; border:1px solid var(--rule); min-width:260px;">
       <button class="btn-mini" onclick="saveSposiEmail()">Salva email sposi</button>
     </div>
-    <div class="criterio-note" style="display:flex; gap:10px; align-items:center;">
+    <div class="controls-box" style="display:flex; gap:10px; align-items:center;">
       <label style="display:flex; gap:8px; align-items:center; cursor:pointer;">
         <input type="checkbox" ${w.sposiCanSeeDesign?'checked':''} onchange="toggleSposiDesignConsent(this.checked)">
-        <span><b>Permetti agli sposi di vedere la sezione "Grafica & Moodboard"</b> (palette, stationary, planimetria) — sola visualizzazione, senza poterla modificare.</span>
+        <span>Permetti agli sposi di vedere "Grafica & Moodboard" (sola visualizzazione)</span>
       </label>
     </div>
-    <div class="criterio-note">
-      <b>Fornitori mostrati agli sposi nella loro "Vetrina":</b> seleziona solo quelli che vuoi far conoscere a questa coppia — vedranno esclusivamente questi, mai l'intero tuo database.
-      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
+    <div class="controls-box">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:8px;">Fornitori mostrati agli sposi nella loro "Vetrina"</label>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
         ${masterFornitori.length ? masterFornitori.map(f=>`
           <label style="display:flex; align-items:center; gap:6px; background:var(--white-ish); border:1px solid var(--rule); border-radius:20px; padding:5px 12px 5px 8px; cursor:pointer; font-size:12.5px;">
             <input type="checkbox" ${(w.sposiFornitoriVisibili||[]).includes(f.id)?'checked':''} onchange="toggleSposiFornitoreVisibile('${f.id.replace(/'/g,"\\'")}',this.checked)">
@@ -3419,6 +3413,11 @@ function renderAll(){
     document.getElementById('weddingHead').innerHTML = '';
     document.getElementById('subnav').innerHTML = '';
     document.getElementById('content').innerHTML = renderLoginScreen();
+    const et = document.getElementById('exportToolbar'); if(et) et.style.display = 'none';
+    const amb = document.getElementById('appModeToggleBtn'); if(amb) amb.style.display = 'none';
+    const nwb = document.getElementById('newWeddingBtn'); if(nwb) nwb.style.display = 'none';
+    const ib = document.getElementById('identityBadge'); if(ib) ib.style.display = 'none';
+    const rtw = document.getElementById('roleToggleWrap'); if(rtw) rtw.style.display = 'none';
     return;
   }
   if(state.role==='planner' && state.appMode==='disponibilita'){
@@ -3591,11 +3590,9 @@ function updateMasterFornitoreField(id, field, value){
 function renderMasterFornitorePortfolioEditor(f, isPlannerMode){
   return `
     ${isPlannerMode ? `
-    <div class="criterio-note" style="margin-bottom:16px;">
-      <b>Email di accesso:</b> l'account con cui questo fornitore farà il login sul sito per gestire da solo la propria scheda (deve corrispondere a un utente creato in Firebase Authentication).
-      <div style="margin-top:8px;">
-        <input type="email" value="${f.email||''}" placeholder="es. lamimosa@fiori.it" onchange="updateMasterFornitoreField('${f.id}','email',this.value)" style="width:100%; max-width:320px; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--white-ish);">
-      </div>
+    <div class="controls-box">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Email di accesso</label>
+      <input type="email" value="${f.email||''}" placeholder="es. lamimosa@fiori.it" onchange="updateMasterFornitoreField('${f.id}','email',this.value)" style="width:100%; max-width:320px; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--white-ish);">
     </div>
     ` : ''}
 
@@ -4309,9 +4306,9 @@ function renderEmergencyBlock(w, editable){
   const ec = w.emergencyContacts || [{label:'',numero:''},{label:'',numero:''}];
   if(editable){
     return `
-      <div class="criterio-note">
-        <b>Numeri di riferimento per l'evento</b> — visibili a tutti i fornitori, da usare in caso di imprevisti.
-        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:8px;">
+      <div class="controls-box">
+        <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:8px;">Numeri di riferimento per l'evento</label>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
           ${ec.map((c,i)=>`
             <div style="display:flex; gap:6px; align-items:center;">
               <input type="text" value="${c.label}" placeholder="es. Monica (Wedding Planner)" onchange="updateEmergencyContact(${i},'label',this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; min-width:180px;">
@@ -4325,8 +4322,8 @@ function renderEmergencyBlock(w, editable){
   const valorizzati = ec.filter(c=>c.numero);
   if(!valorizzati.length) return '';
   return `
-    <div class="criterio-note">
-      <b>Numeri di riferimento per l'evento (imprevisti):</b>
+    <div class="controls-box">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Numeri di riferimento per l'evento</label>
       ${valorizzati.map(c=>` ${c.label?c.label+': ':''}<span style="font-family:'IBM Plex Mono',monospace; color:var(--wine); font-weight:600;">${c.numero}</span>`).join(' &nbsp;·&nbsp; ')}
     </div>
   `;
