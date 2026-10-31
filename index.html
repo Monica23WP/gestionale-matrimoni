@@ -737,8 +737,8 @@
     <div class="export-toolbar" id="exportToolbar">
       <span>Esporta questa scheda</span>
       <button onclick="window.print()">🖶 Stampa / PDF</button>
-      <button onclick="exportCurrentToExcel()">Esporta Excel</button>
-      <button onclick="exportCurrentToCSV()">Esporta CSV</button>
+      <button id="exportExcelBtn" onclick="exportCurrentToExcel()">Esporta Excel</button>
+      <button id="exportCsvBtn" onclick="exportCurrentToCSV()">Esporta CSV</button>
     </div>
 
     <div class="content" id="content"></div>
@@ -3432,6 +3432,8 @@ function renderAll(){
   const amb = document.getElementById('appModeToggleBtn');
   if(amb){ amb.textContent = '📅 Disponibilità Fornitori'; amb.onclick = toggleAppMode; amb.style.display = (state.role==='planner' && !state.isPreview) ? '' : 'none'; }
   const et = document.getElementById('exportToolbar'); if(et) et.style.display = '';
+  const eeb = document.getElementById('exportExcelBtn'); if(eeb) eeb.style.display = '';
+  const ecb = document.getElementById('exportCsvBtn'); if(ecb) ecb.style.display = '';
   const nwb = document.getElementById('newWeddingBtn'); if(nwb && state.isPreview) nwb.style.display='none';
   renderSidebar();
   renderHeader();
@@ -3815,7 +3817,9 @@ function renderDisponibilitaScreen(){
   document.getElementById('roleToggleWrap').style.display = 'none';
   document.getElementById('identityBadge').style.display = 'none';
   document.getElementById('subnav').innerHTML = '';
-  document.getElementById('exportToolbar').style.display = 'none';
+  document.getElementById('exportToolbar').style.display = '';
+  document.getElementById('exportExcelBtn').style.display = 'none';
+  document.getElementById('exportCsvBtn').style.display = 'none';
 
   const listEl = document.getElementById('tabList');
   listEl.innerHTML = `
