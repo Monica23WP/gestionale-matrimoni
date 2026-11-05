@@ -985,6 +985,10 @@ const weddings = [
 // Chiamata su OGNI matrimonio ogni volta che viene caricato o creato — mai solo una tantum — così un campo
 // aggiunto in futuro non lascia mai "indietro" i matrimoni già esistenti o quelli nuovi caricati da Firestore.
 // Tutti i "partecipanti" a cui si può assegnare una voce di timeline: fornitori + sposi + team WP
+const BASE_TIMELINE_ROLES = ['Location','Catering','Musica','Fotografo','Videomaker','Auto','Makeup Artist','Hair Stylist','Intrattenimento','Flower Designer','Chiesa','Wedding Planner','Assistente Wedding Planner','Atelier'];
+function slugRuolo(label){
+  return label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+}
 function normalizeWedding(w){
   if(!w.rsvpChannel) w.rsvpChannel = {tipo:'', valore:''};
   if(w.sposiEmail===undefined) w.sposiEmail = '';
@@ -1215,11 +1219,6 @@ function sendReminderEmail(catNome, sgNome, idx, sIdx, tipo){
 }
 
 const PLANNER_SECTIONS = [['budget','Budget'],['fornitori','Fornitori'],['schede','Schede Fornitori'],['timeline','Timeline'],['timelinegenerale','Timeline Generale'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
-
-const BASE_TIMELINE_ROLES = ['Location','Catering','Musica','Fotografo','Videomaker','Auto','Makeup Artist','Hair Stylist','Intrattenimento','Flower Designer','Chiesa','Wedding Planner','Assistente Wedding Planner','Atelier'];
-function slugRuolo(label){
-  return label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
-}
 
 function sectionsForRole(role, w){
   if(role==='planner') return PLANNER_SECTIONS;
