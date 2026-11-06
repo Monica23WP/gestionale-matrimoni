@@ -659,6 +659,7 @@
     .cat-block, .fornitore-card, table{ break-inside:avoid; }
     .cat-title{ break-after:avoid; }
     input, select{ border:none !important; background:none !important; -webkit-appearance:none; appearance:none; }
+    input::placeholder{ color:transparent !important; }
   }
 
   @media (max-width:860px){
@@ -2224,12 +2225,16 @@ function renderTimelineByRole(w){
     <div class="fornitore-card">
       <h2>${role.label}</h2>
       ${tasks.length ? tasks.map((t,i)=>`
-        <div class="task-row" style="align-items:flex-start; flex-wrap:wrap;">
-          <input type="checkbox" ${state.timelineRowsSelected.has(i)?'checked':''} onchange="toggleTimelineRowSelect(${i}, this.checked)" title="Seleziona per copiare su altre figure" style="margin-top:8px;">
-          <input type="text" value="${t.t}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'t',this.value)" style="width:80px; border:1px solid var(--rule); border-radius:6px; padding:5px 6px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;">
-          <input type="text" value="${t.d}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'d',this.value)" style="flex:1; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:13px;">
-          <input type="text" value="${t.note||''}" placeholder="Nota (facoltativa)" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'note',this.value)" style="flex:1; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:12.5px; font-style:italic; color:var(--ink-soft);">
-          <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${sel.replace(/'/g,"\\'")}',${i})">rimuovi</button>
+        <div style="border-bottom:1px solid var(--rule); padding:8px 0; margin-bottom:4px;">
+          <div class="task-row" style="align-items:center;">
+            <input type="checkbox" ${state.timelineRowsSelected.has(i)?'checked':''} onchange="toggleTimelineRowSelect(${i}, this.checked)" title="Seleziona per copiare su altre figure">
+            <input type="text" value="${t.t}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'t',this.value)" style="width:80px; border:1px solid var(--rule); border-radius:6px; padding:5px 6px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;">
+            <input type="text" value="${t.d}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'d',this.value)" style="flex:1; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:13px;">
+            <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${sel.replace(/'/g,"\\'")}',${i})">rimuovi</button>
+          </div>
+          <div style="margin-top:6px; padding-left:28px;">
+            <input type="text" value="${t.note||''}" placeholder="Nota (facoltativa)" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'note',this.value)" style="width:100%; max-width:480px; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:12.5px; font-style:italic; color:var(--ink-soft);">
+          </div>
         </div>
       `).join('') : `<div class="empty-state" style="margin-bottom:10px;">Nessuna voce di timeline ancora inserita per "${role.label}".</div>`}
       <div class="add-row" style="margin-top:10px; align-items:flex-start;">
