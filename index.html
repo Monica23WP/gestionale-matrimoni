@@ -2223,15 +2223,17 @@ function renderTimelineByRole(w){
     <div class="fornitore-card">
       <h2>${role.label}</h2>
       ${tasks.length ? tasks.map((t,i)=>`
-        <div class="task-row" style="align-items:center;">
+        <div class="task-row" style="align-items:flex-start; flex-wrap:wrap;">
           <input type="text" value="${t.t}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'t',this.value)" style="width:80px; border:1px solid var(--rule); border-radius:6px; padding:5px 6px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;">
-          <input type="text" value="${t.d}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'d',this.value)" style="flex:1; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:13px;">
+          <input type="text" value="${t.d}" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'d',this.value)" style="flex:1; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:13px;">
+          <input type="text" value="${t.note||''}" placeholder="Nota (facoltativa)" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'note',this.value)" style="flex:1; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:12.5px; font-style:italic; color:var(--ink-soft);">
           <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${sel.replace(/'/g,"\\'")}',${i})">rimuovi</button>
         </div>
       `).join('') : `<div class="empty-state" style="margin-bottom:10px;">Nessuna voce di timeline ancora inserita per "${role.label}".</div>`}
       <div class="add-row" style="margin-top:10px; align-items:flex-start;">
         <input type="text" id="newTaskTimeRole" placeholder="Orario (es. 17:30)" style="width:110px;">
         <input type="text" id="newTaskDescRole" placeholder="Cosa deve fare">
+        <input type="text" id="newTaskNoteRole" placeholder="Nota (facoltativa)">
         <button onclick="addTimelineRowRole('${sel.replace(/'/g,"\\'")}')">+ Aggiungi voce timeline</button>
       </div>
       ${roles.length>1 ? `
@@ -2274,12 +2276,13 @@ function getTimelineRoleCopyTargets(){
 function addTimelineRowRole(roleId){
   const t = document.getElementById('newTaskTimeRole').value.trim();
   const d = document.getElementById('newTaskDescRole').value.trim();
+  const note = document.getElementById('newTaskNoteRole').value.trim();
   if(!d){ alert('Serve almeno la descrizione della mansione.'); return; }
   const w = currentWedding();
   const destinatari = [roleId, ...getTimelineRoleCopyTargets()];
   destinatari.forEach(r=>{
     if(!w.tasks[r]) w.tasks[r] = [];
-    w.tasks[r].push({t: t || '—', d});
+    w.tasks[r].push({t: t || '—', d, note});
   });
   persistWedding(w);
   renderContent();
@@ -4320,7 +4323,7 @@ function renderTimelineGenerale(w){
   const rows = [];
   roles.forEach(role=>{
     (w.tasks[role.id]||[]).forEach((t,idx)=>{
-      rows.push({ref:role.id, cat:role.label, nomeVisualizzato: role.label, t: t.t, d: t.d, idx, key: role.id+'|'+idx});
+      rows.push({ref:role.id, cat:role.label, nomeVisualizzato: role.label, t: t.t, d: t.d, note: t.note||'', idx, key: role.id+'|'+idx});
     });
   });
   if(!state.timelineExclude) state.timelineExclude = new Set();
@@ -4333,23 +4336,25 @@ function renderTimelineGenerale(w){
       </select>
       <input type="text" id="tgOrario" placeholder="Orario (es. 17:30)" style="width:110px;">
       <input type="text" id="tgAttivita" placeholder="Attività">
+      <input type="text" id="tgNote" placeholder="Nota (facoltativa)">
       <button onclick="addTimelineRowGenerale()">+ Aggiungi voce</button>
     </div>
   `;
   if(!rows.length) return renderEmergencyBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura.</div>` + formAggiunta;
   return renderEmergencyBlock(w, true) + `
     <div class="criterio-note">
-      Tutti gli orari di ogni figura, raggruppati in ordine alfabetico per ruolo e, dentro ogni ruolo, in ordine di orario. Clicca su orario o attività per modificarli direttamente da qui. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
+      Tutti gli orari di ogni figura, raggruppati in ordine alfabetico per ruolo e, dentro ogni ruolo, in ordine di orario. Clicca su orario, attività o nota per modificarli direttamente da qui. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
     </div>
     <table>
-      <thead><tr><th style="width:36px"></th><th>Ruolo</th><th>Orario</th><th>Attività</th><th></th></tr></thead>
+      <thead><tr><th style="width:36px"></th><th>Ruolo</th><th>Orario</th><th>Attività</th><th>Note</th><th></th></tr></thead>
       <tbody>
         ${rows.map(r=>`
           <tr data-include="${state.timelineExclude.has(r.key)?'0':'1'}">
             <td><input type="checkbox" ${state.timelineExclude.has(r.key)?'':'checked'} onchange="toggleTimelineRow('${r.key.replace(/'/g,"\\'")}',this.checked)"></td>
             <td class="inc-label">${r.cat}</td>
             <td><input type="text" value="${r.t}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'t',this.value)" style="width:76px; border:1px solid var(--rule); border-radius:6px; padding:4px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;"></td>
-            <td><input type="text" value="${r.d}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'d',this.value)" style="width:100%; min-width:180px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:13px;"></td>
+            <td><input type="text" value="${r.d}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'d',this.value)" style="width:100%; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:13px;"></td>
+            <td><input type="text" value="${r.note}" placeholder="—" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'note',this.value)" style="width:100%; min-width:140px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:12.5px; font-style:italic; color:var(--ink-soft);"></td>
             <td><button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx})">rimuovi</button></td>
           </tr>
         `).join('')}
@@ -4362,11 +4367,12 @@ function addTimelineRowGenerale(){
   const roleId = document.getElementById('tgFornitoreSel').value;
   const t = document.getElementById('tgOrario').value.trim();
   const d = document.getElementById('tgAttivita').value.trim();
+  const note = document.getElementById('tgNote').value.trim();
   if(!roleId){ alert('Seleziona una figura/ruolo.'); return; }
   if(!t || !d){ alert('Servono sia orario che attività.'); return; }
   const w = currentWedding();
   if(!w.tasks[roleId]) w.tasks[roleId] = [];
-  w.tasks[roleId].push({t, d});
+  w.tasks[roleId].push({t, d, note});
   persistWedding(w);
   renderContent();
 }
