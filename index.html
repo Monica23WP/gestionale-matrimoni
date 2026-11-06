@@ -2233,7 +2233,7 @@ function renderTimelineByRole(w){
             <button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${sel.replace(/'/g,"\\'")}',${i})">rimuovi</button>
           </div>
           <div style="margin-top:6px; padding-left:28px;">
-            <input type="text" value="${t.note||''}" placeholder="Nota (facoltativa)" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'note',this.value)" style="width:100%; max-width:480px; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:12.5px; font-style:italic; color:var(--ink-soft);">
+            <input type="text" value="${t.note||''}" placeholder="Nota (facoltativa)" onchange="updateTimelineRow('${sel.replace(/'/g,"\\'")}',${i},'note',this.value)" style="width:100%; max-width:480px; border:1px solid var(--rule); border-radius:6px; padding:5px 8px; font-size:12.5px; font-weight:700; font-style:italic; color:var(--ink);">
           </div>
         </div>
       `).join('') : `<div class="empty-state" style="margin-bottom:10px;">Nessuna voce di timeline ancora inserita per "${role.label}".</div>`}
@@ -2275,6 +2275,7 @@ function copySelectedTimelineRows(sourceRoleId){
   targets.forEach(roleId=>{
     if(!w.tasks[roleId]) w.tasks[roleId] = [];
     daCopiare.forEach(t=> w.tasks[roleId].push({t: t.t, d: t.d, note: t.note||''}));
+    w.tasks[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
   });
   persistWedding(w);
   state.timelineRowsSelected = new Set();
@@ -2312,6 +2313,7 @@ function addTimelineRowRole(roleId){
   destinatari.forEach(r=>{
     if(!w.tasks[r]) w.tasks[r] = [];
     w.tasks[r].push({t: t || '—', d, note});
+    w.tasks[r].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
   });
   persistWedding(w);
   renderContent();
@@ -2505,8 +2507,14 @@ function removeSchedaCampo(ref, idx){
 }
 
 function updateTimelineRow(ref, idx, field, value){
-  currentWedding().tasks[ref][idx][field] = value;
-  persistWedding(currentWedding());
+  const w = currentWedding();
+  w.tasks[ref][idx][field] = value;
+  if(field==='t'){
+    w.tasks[ref].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+    state.timelineRowsSelected = new Set();
+  }
+  persistWedding(w);
+  if(field==='t') renderContent();
 }
 function removeTimelineRow(ref, idx){
   currentWedding().tasks[ref].splice(idx,1);
@@ -4383,7 +4391,7 @@ function renderTimelineGenerale(w){
             <td class="inc-label">${r.cat}</td>
             <td><input type="text" value="${r.t}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'t',this.value)" style="width:76px; border:1px solid var(--rule); border-radius:6px; padding:4px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;"></td>
             <td><input type="text" value="${r.d}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'d',this.value)" style="width:100%; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:13px;"></td>
-            <td><input type="text" value="${r.note}" placeholder="—" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'note',this.value)" style="width:100%; min-width:140px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:12.5px; font-style:italic; color:var(--ink-soft);"></td>
+            <td><input type="text" value="${r.note}" placeholder="—" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'note',this.value)" style="width:100%; min-width:140px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:12.5px; font-weight:700; font-style:italic; color:var(--ink);"></td>
             <td><button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx})">rimuovi</button></td>
           </tr>
         `).join('')}
@@ -4402,6 +4410,7 @@ function addTimelineRowGenerale(){
   const w = currentWedding();
   if(!w.tasks[roleId]) w.tasks[roleId] = [];
   w.tasks[roleId].push({t, d, note});
+  w.tasks[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
   persistWedding(w);
   renderContent();
 }
