@@ -4364,7 +4364,7 @@ function renderTimelineGenerale(w){
     });
   });
   if(!state.timelineExclude) state.timelineExclude = new Set();
-  rows.sort((a,b)=> a.cat.localeCompare(b.cat, 'it') || timeSortKey(a.t)-timeSortKey(b.t));
+  rows.sort((a,b)=> timeSortKey(a.t)-timeSortKey(b.t) || a.cat.localeCompare(b.cat, 'it'));
 
   const formAggiunta = `
     <div class="add-row" style="margin-top:14px; flex-wrap:wrap;">
