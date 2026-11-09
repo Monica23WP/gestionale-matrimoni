@@ -4357,16 +4357,73 @@ function updateEmergencyContact(i, field, value){
   persistWedding(w);
 }
 
+function encodeGroupItems(items){
+  return items.map(it=>`${it.ref}:::${it.idx}`).join('|||');
+}
+function decodeGroupItems(str){
+  return str.split('|||').map(s=>{ const parts = s.split(':::'); return {ref:parts[0], idx:parseInt(parts[1])}; });
+}
+function updateGroupedTimelineField(encoded, field, value){
+  const items = decodeGroupItems(encoded);
+  const w = currentWedding();
+  items.forEach(it=>{
+    if(w.tasks[it.ref] && w.tasks[it.ref][it.idx]) w.tasks[it.ref][it.idx][field] = value;
+  });
+  if(field==='t'){
+    // ogni ruolo coinvolto va riordinato per orario per restare coerente con la vista "Timeline"
+    const refsCoinvolti = [...new Set(items.map(it=>it.ref))];
+    refsCoinvolti.forEach(ref=> w.tasks[ref].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t)));
+  }
+  persistWedding(w);
+  renderContent();
+}
+function toggleGroupedTimelineRow(encoded, checked){
+  const items = decodeGroupItems(encoded);
+  items.forEach(it=>{
+    const key = it.ref+'|'+it.idx;
+    if(checked) state.timelineExclude.delete(key); else state.timelineExclude.add(key);
+  });
+  renderContent();
+}
+function removeGroupedTimelineRow(encoded){
+  if(!confirm('Eliminare questa voce da tutte le figure a cui è collegata? Operazione non reversibile.')) return;
+  const items = decodeGroupItems(encoded);
+  const w = currentWedding();
+  const byRef = {};
+  items.forEach(it=>{ (byRef[it.ref] ||= []).push(it.idx); });
+  Object.entries(byRef).forEach(([ref, idxs])=>{
+    idxs.sort((a,b)=>b-a).forEach(idx=> w.tasks[ref].splice(idx,1));
+  });
+  persistWedding(w);
+  renderContent();
+}
+
 function renderTimelineGenerale(w){
   const roles = w.timelineRoles;
   const rows = [];
   roles.forEach(role=>{
     (w.tasks[role.id]||[]).forEach((t,idx)=>{
-      rows.push({ref:role.id, cat:role.label, nomeVisualizzato: role.label, t: t.t, d: t.d, note: t.note||'', idx, key: role.id+'|'+idx});
+      rows.push({ref:role.id, cat:role.label, t: t.t, d: t.d, note: t.note||'', idx, key: role.id+'|'+idx});
     });
   });
   if(!state.timelineExclude) state.timelineExclude = new Set();
-  rows.sort((a,b)=> timeSortKey(a.t)-timeSortKey(b.t) || a.cat.localeCompare(b.cat, 'it'));
+
+  // raggruppa le voci con stesso orario E stessa mansione (stesso testo), invece di ripeterle una per figura
+  const gruppi = [];
+  const indice = {};
+  rows.forEach(r=>{
+    const chiave = (r.t||'').trim().toLowerCase() + '||' + (r.d||'').trim().toLowerCase();
+    if(indice[chiave]===undefined){
+      indice[chiave] = gruppi.length;
+      gruppi.push({ t:r.t, d:r.d, ruoli:[r.cat], note:[r.note].filter(Boolean), items:[{ref:r.ref, idx:r.idx}] });
+    } else {
+      const g = gruppi[indice[chiave]];
+      g.ruoli.push(r.cat);
+      if(r.note && !g.note.includes(r.note)) g.note.push(r.note);
+      g.items.push({ref:r.ref, idx:r.idx});
+    }
+  });
+  gruppi.sort((a,b)=> timeSortKey(a.t)-timeSortKey(b.t) || a.ruoli[0].localeCompare(b.ruoli[0], 'it'));
 
   const formAggiunta = `
     <div class="add-row" style="margin-top:14px; flex-wrap:wrap;">
@@ -4379,24 +4436,24 @@ function renderTimelineGenerale(w){
       <button onclick="addTimelineRowGenerale()">+ Aggiungi voce</button>
     </div>
   `;
-  if(!rows.length) return renderEmergencyBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura.</div>` + formAggiunta;
+  if(!gruppi.length) return renderEmergencyBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura.</div>` + formAggiunta;
   return renderEmergencyBlock(w, true) + `
-    <div class="criterio-note">
-      Tutti gli orari di ogni figura, raggruppati in ordine alfabetico per ruolo e, dentro ogni ruolo, in ordine di orario. Clicca su orario, attività o nota per modificarli direttamente da qui. Deseleziona le righe che non vuoi includere quando stampi o esporti questa scheda (restano comunque visibili qui, solo escluse dalla stampa/esportazione).
-    </div>
     <table>
-      <thead><tr><th style="width:36px"></th><th>Ruolo</th><th>Orario</th><th>Attività</th><th>Note</th><th></th></tr></thead>
+      <thead><tr><th style="width:36px"></th><th>Ruolo/i</th><th>Orario</th><th>Attività</th><th>Note</th><th></th></tr></thead>
       <tbody>
-        ${rows.map(r=>`
-          <tr data-include="${state.timelineExclude.has(r.key)?'0':'1'}">
-            <td><input type="checkbox" ${state.timelineExclude.has(r.key)?'':'checked'} onchange="toggleTimelineRow('${r.key.replace(/'/g,"\\'")}',this.checked)"></td>
-            <td class="inc-label">${r.cat}</td>
-            <td><input type="text" value="${r.t}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'t',this.value)" style="width:76px; border:1px solid var(--rule); border-radius:6px; padding:4px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;"></td>
-            <td><input type="text" value="${r.d}" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'d',this.value)" style="width:100%; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:13px;"></td>
-            <td><input type="text" value="${r.note}" placeholder="—" onchange="updateTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx},'note',this.value)" style="width:100%; min-width:140px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:12.5px; font-weight:700; font-style:italic; color:var(--ink);"></td>
-            <td><button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeTimelineRow('${r.ref.replace(/'/g,"\\'")}',${r.idx})">rimuovi</button></td>
+        ${gruppi.map(g=>{
+          const encoded = encodeGroupItems(g.items).replace(/'/g,"\\'");
+          const tuttiInclusi = g.items.every(it=>!state.timelineExclude.has(it.ref+'|'+it.idx));
+          return `
+          <tr data-include="${tuttiInclusi?'1':'0'}">
+            <td><input type="checkbox" ${tuttiInclusi?'checked':''} onchange="toggleGroupedTimelineRow('${encoded}',this.checked)"></td>
+            <td class="inc-label">${g.ruoli.join(', ')}</td>
+            <td><input type="text" value="${g.t}" onchange="updateGroupedTimelineField('${encoded}','t',this.value)" style="width:76px; border:1px solid var(--rule); border-radius:6px; padding:4px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;"></td>
+            <td><input type="text" value="${g.d}" onchange="updateGroupedTimelineField('${encoded}','d',this.value)" style="width:100%; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:13px;"></td>
+            <td><input type="text" value="${g.note.join(' / ')}" placeholder="—" onchange="updateGroupedTimelineField('${encoded}','note',this.value)" style="width:100%; min-width:140px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:12.5px; font-weight:700; font-style:italic; color:var(--ink);"></td>
+            <td><button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeGroupedTimelineRow('${encoded}')">rimuovi</button></td>
           </tr>
-        `).join('')}
+        `}).join('')}
       </tbody>
     </table>
     ${formAggiunta}
