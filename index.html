@@ -4319,8 +4319,10 @@ function renderUnrecognizedScreen(){
 
 // ============ TIMELINE GENERALE (tutti i fornitori insieme) ============
 function timeSortKey(t){
-  const m = (''+t).trim().match(/^(\d{1,2})[:.](\d{2})$/);
-  if(!m) return -1;
+  // Cerca un orario tipo 9:30, 09.30, 17:05 in qualunque punto del testo (anche con "ore" davanti,
+  // spazi, o altro testo intorno) invece di pretendere che il campo contenga SOLO l'orario.
+  const m = (''+t).match(/(\d{1,2})[:.](\d{2})/);
+  if(!m) return 999999; // senza un orario riconoscibile, va in fondo, non confonde l'ordine di chi ce l'ha
   return parseInt(m[1])*60 + parseInt(m[2]);
 }
 function renderEmergencyBlock(w, editable){
