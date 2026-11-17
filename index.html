@@ -283,6 +283,8 @@
   }
   td.num, th.num{ font-family:'IBM Plex Mono',monospace; text-align:right; }
   tr:last-child td{ border-bottom:1px solid var(--rule); }
+  table.tg-table td{ border-bottom:1px solid #1B4A8A; }
+  table.tg-table tr:last-child td{ border-bottom:1px solid #1B4A8A; }
 
   /* stamp badges */
   .stamp{
@@ -4438,7 +4440,7 @@ function renderTimelineGenerale(w){
   `;
   if(!gruppi.length) return renderEmergencyBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura.</div>` + formAggiunta;
   return renderEmergencyBlock(w, true) + `
-    <table>
+    <table class="tg-table">
       <thead><tr><th style="width:36px"></th><th>Orario</th><th>Attività</th><th>Note</th><th>Categorie</th><th></th></tr></thead>
       <tbody>
         ${gruppi.map(g=>{
