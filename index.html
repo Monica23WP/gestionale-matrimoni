@@ -1002,6 +1002,7 @@ function normalizeWedding(w){
   if(!w.fornitori) w.fornitori = [];
   if(!w.guests) w.guests = [];
   if(!w.tasks) w.tasks = {};
+  if(!w.tasksPlanB) w.tasksPlanB = {};
   if(!w.timelineRoles){
     w.timelineRoles = BASE_TIMELINE_ROLES.map(label=>({id:slugRuolo(label), label}));
   }
@@ -1043,7 +1044,7 @@ if(weddings[0].guests.length){
   g[10].rsvp='declinato';
 }
 
-let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null, isPreview:false, homeExpand:null, dispoView:'calendario', comparazioneSelected:[], comparazioneMonth:null, fornitoreMasterId:null, fornitoreAssignments:[], fornitoreView:null, guestVetrinaSelected:[], vetrinaMonth:null, timelineRoleSelected:null };
+let state = { weddingIndex:0, role:'planner', subtab:'budget', supplierRef:null, moodSubtab:'palette', guestSubtab:'principale', guestFilter:'', schedeSupplier:null, appMode:'matrimoni', selectedMasterFornitore:null, calendarMonth:null, calendarSelectedDay:null, isPreview:false, homeExpand:null, dispoView:'calendario', comparazioneSelected:[], comparazioneMonth:null, fornitoreMasterId:null, fornitoreAssignments:[], fornitoreView:null, guestVetrinaSelected:[], vetrinaMonth:null, timelineRoleSelected:null, timelinePlanB:false };
 
 function fmtEuro(n){
   if(n===null || n===undefined) return '—';
@@ -2206,13 +2207,29 @@ function setSupplier(name){ state.supplierRef = name; renderContent(); }
 // ============ TIMELINE & SCHEDE TECNICHE FORNITORI ============
 function setSchedeSupplier(ref){ state.schedeSupplier = ref; renderContent(); }
 
+function tasksStore(w){ return state.timelinePlanB ? w.tasksPlanB : w.tasks; }
+function setTimelinePlan(isPlanB){
+  state.timelinePlanB = isPlanB;
+  state.timelineRowsSelected = new Set();
+  state.timelineExclude = new Set();
+  renderContent();
+}
+function renderTimelinePlanToggle(){
+  return `
+    <div class="mood-subnav" style="margin-bottom:12px;">
+      <button class="${!state.timelinePlanB?'active':''}" onclick="setTimelinePlan(false)">☀️ Piano A — giornata regolare</button>
+      <button class="${state.timelinePlanB?'active':''}" onclick="setTimelinePlan(true)" style="${state.timelinePlanB?'':'color:var(--ink-soft);'}">🌧️ Piano B — in caso di pioggia</button>
+    </div>
+  `;
+}
 function renderTimelineByRole(w){
   const roles = w.timelineRoles;
   if(!state.timelineRoleSelected || !roles.find(r=>r.id===state.timelineRoleSelected)) state.timelineRoleSelected = roles[0].id;
   const sel = state.timelineRoleSelected;
   const role = roles.find(r=>r.id===sel);
-  if(!w.tasks[sel]) w.tasks[sel] = [];
-  const tasks = w.tasks[sel];
+  const store = tasksStore(w);
+  if(!store[sel]) store[sel] = [];
+  const tasks = store[sel];
   if(!state.timelineRowsSelected) state.timelineRowsSelected = new Set();
 
   const nav = `
@@ -2223,9 +2240,10 @@ function renderTimelineByRole(w){
   `;
 
   return `
+    ${renderTimelinePlanToggle()}
     ${nav}
     <div class="fornitore-card">
-      <h2>${role.label}</h2>
+      <h2>${role.label}${state.timelinePlanB ? ' <span style="font-size:11px; font-weight:700; color:var(--wine); text-transform:uppercase; letter-spacing:.05em;">· Piano B pioggia</span>' : ''}</h2>
       ${tasks.length ? tasks.map((t,i)=>`
         <div style="border-bottom:1px solid var(--rule); padding:8px 0; margin-bottom:4px;">
           <div class="task-row" style="align-items:center;">
@@ -2272,12 +2290,13 @@ function copySelectedTimelineRows(sourceRoleId){
   if(!targets.length){ alert('Seleziona almeno una figura a cui copiare le voci.'); return; }
   if(!state.timelineRowsSelected || !state.timelineRowsSelected.size){ alert('Spunta prima almeno una voce già scritta da copiare.'); return; }
   const w = currentWedding();
-  const source = w.tasks[sourceRoleId] || [];
+  const store = tasksStore(w);
+  const source = store[sourceRoleId] || [];
   const daCopiare = [...state.timelineRowsSelected].sort((a,b)=>a-b).map(i=>source[i]).filter(Boolean);
   targets.forEach(roleId=>{
-    if(!w.tasks[roleId]) w.tasks[roleId] = [];
-    daCopiare.forEach(t=> w.tasks[roleId].push({t: t.t, d: t.d, note: t.note||''}));
-    w.tasks[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+    if(!store[roleId]) store[roleId] = [];
+    daCopiare.forEach(t=> store[roleId].push({t: t.t, d: t.d, note: t.note||''}));
+    store[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
   });
   persistWedding(w);
   state.timelineRowsSelected = new Set();
@@ -2296,6 +2315,7 @@ function addCustomTimelineRole(){
   if(w.timelineRoles.find(r=>r.id===id)) id = id + '-' + Date.now();
   w.timelineRoles.push({id, label});
   w.tasks[id] = w.tasks[id] || [];
+  w.tasksPlanB[id] = w.tasksPlanB[id] || [];
   persistWedding(w);
   state.timelineRoleSelected = id;
   renderContent();
@@ -2311,11 +2331,12 @@ function addTimelineRowRole(roleId){
   const note = document.getElementById('newTaskNoteRole').value.trim();
   if(!d){ alert('Serve almeno la descrizione della mansione.'); return; }
   const w = currentWedding();
+  const store = tasksStore(w);
   const destinatari = [roleId, ...getTimelineRoleCopyTargets()];
   destinatari.forEach(r=>{
-    if(!w.tasks[r]) w.tasks[r] = [];
-    w.tasks[r].push({t: t || '—', d, note});
-    w.tasks[r].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+    if(!store[r]) store[r] = [];
+    store[r].push({t: t || '—', d, note});
+    store[r].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
   });
   persistWedding(w);
   renderContent();
@@ -2510,16 +2531,17 @@ function removeSchedaCampo(ref, idx){
 
 function updateTimelineRow(ref, idx, field, value){
   const w = currentWedding();
-  w.tasks[ref][idx][field] = value;
+  const store = tasksStore(w);
+  store[ref][idx][field] = value;
   if(field==='t'){
-    w.tasks[ref].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+    store[ref].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
     state.timelineRowsSelected = new Set();
   }
   persistWedding(w);
   if(field==='t') renderContent();
 }
 function removeTimelineRow(ref, idx){
-  currentWedding().tasks[ref].splice(idx,1);
+  tasksStore(currentWedding())[ref].splice(idx,1);
   persistWedding(currentWedding());
   renderContent();
 }
@@ -3461,7 +3483,7 @@ function renderAll(){
 }
 
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
-const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','guests','moodboard','tasks','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles'];
+const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','guests','moodboard','tasks','tasksPlanB','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles'];
 
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
@@ -4368,13 +4390,14 @@ function decodeGroupItems(str){
 function updateGroupedTimelineField(encoded, field, value){
   const items = decodeGroupItems(encoded);
   const w = currentWedding();
+  const store = tasksStore(w);
   items.forEach(it=>{
-    if(w.tasks[it.ref] && w.tasks[it.ref][it.idx]) w.tasks[it.ref][it.idx][field] = value;
+    if(store[it.ref] && store[it.ref][it.idx]) store[it.ref][it.idx][field] = value;
   });
   if(field==='t'){
     // ogni ruolo coinvolto va riordinato per orario per restare coerente con la vista "Timeline"
     const refsCoinvolti = [...new Set(items.map(it=>it.ref))];
-    refsCoinvolti.forEach(ref=> w.tasks[ref].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t)));
+    refsCoinvolti.forEach(ref=> store[ref].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t)));
   }
   persistWedding(w);
   renderContent();
@@ -4391,10 +4414,11 @@ function removeGroupedTimelineRow(encoded){
   if(!confirm('Eliminare questa voce da tutte le figure a cui è collegata? Operazione non reversibile.')) return;
   const items = decodeGroupItems(encoded);
   const w = currentWedding();
+  const store = tasksStore(w);
   const byRef = {};
   items.forEach(it=>{ (byRef[it.ref] ||= []).push(it.idx); });
   Object.entries(byRef).forEach(([ref, idxs])=>{
-    idxs.sort((a,b)=>b-a).forEach(idx=> w.tasks[ref].splice(idx,1));
+    idxs.sort((a,b)=>b-a).forEach(idx=> store[ref].splice(idx,1));
   });
   persistWedding(w);
   renderContent();
@@ -4402,9 +4426,10 @@ function removeGroupedTimelineRow(encoded){
 
 function renderTimelineGenerale(w){
   const roles = w.timelineRoles;
+  const store = tasksStore(w);
   const rows = [];
   roles.forEach(role=>{
-    (w.tasks[role.id]||[]).forEach((t,idx)=>{
+    (store[role.id]||[]).forEach((t,idx)=>{
       rows.push({ref:role.id, cat:role.label, t: t.t, d: t.d, note: t.note||'', idx, key: role.id+'|'+idx});
     });
   });
@@ -4438,8 +4463,8 @@ function renderTimelineGenerale(w){
       <button onclick="addTimelineRowGenerale()">+ Aggiungi voce</button>
     </div>
   `;
-  if(!gruppi.length) return renderEmergencyBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura.</div>` + formAggiunta;
-  return renderEmergencyBlock(w, true) + `
+  if(!gruppi.length) return renderEmergencyBlock(w, true) + renderTimelinePlanToggle() + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura${state.timelinePlanB ? ' nel Piano B' : ''}.</div>` + formAggiunta;
+  return renderEmergencyBlock(w, true) + renderTimelinePlanToggle() + `
     <table class="tg-table">
       <thead><tr><th style="width:36px"></th><th>Orario</th><th>Attività</th><th>Note</th><th>Categorie</th><th></th></tr></thead>
       <tbody>
@@ -4469,9 +4494,10 @@ function addTimelineRowGenerale(){
   if(!roleId){ alert('Seleziona una figura/ruolo.'); return; }
   if(!t || !d){ alert('Servono sia orario che attività.'); return; }
   const w = currentWedding();
-  if(!w.tasks[roleId]) w.tasks[roleId] = [];
-  w.tasks[roleId].push({t, d, note});
-  w.tasks[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+  const store = tasksStore(w);
+  if(!store[roleId]) store[roleId] = [];
+  store[roleId].push({t, d, note});
+  store[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
   persistWedding(w);
   renderContent();
 }
