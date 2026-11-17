@@ -283,8 +283,8 @@
   }
   td.num, th.num{ font-family:'IBM Plex Mono',monospace; text-align:right; }
   tr:last-child td{ border-bottom:1px solid var(--rule); }
-  table.tg-table td{ border-bottom:1px solid #1B4A8A; }
-  table.tg-table tr:last-child td{ border-bottom:1px solid #1B4A8A; }
+  table.tg-table td{ border-bottom:1px solid var(--ink); }
+  table.tg-table tr:last-child td{ border-bottom:1px solid var(--ink); }
 
   /* stamp badges */
   .stamp{
@@ -4452,7 +4452,7 @@ function renderTimelineGenerale(w){
             <td><input type="text" value="${g.t}" onchange="updateGroupedTimelineField('${encoded}','t',this.value)" style="width:76px; border:1px solid var(--rule); border-radius:6px; padding:4px 5px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--wine); font-weight:600;"></td>
             <td><input type="text" value="${g.d}" onchange="updateGroupedTimelineField('${encoded}','d',this.value)" style="width:100%; min-width:160px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:13px;"></td>
             <td><input type="text" value="${g.note.join(' / ')}" placeholder="—" onchange="updateGroupedTimelineField('${encoded}','note',this.value)" style="width:100%; min-width:140px; border:1px solid var(--rule); border-radius:6px; padding:4px 7px; font-size:12.5px; font-weight:700; font-style:italic; color:var(--ink);"></td>
-            <td class="inc-label"><div style="display:flex; flex-direction:column; gap:5px; min-width:120px;">${g.ruoli.map(r=>`<span style="background:#DCEEFB; color:#1B4A8A; border-radius:6px; padding:4px 10px; font-size:13px; font-weight:700; letter-spacing:.2px; display:inline-block; text-align:center;">${r}</span>`).join('')}</div></td>
+            <td class="inc-label"><div style="display:flex; flex-direction:column; gap:5px; min-width:120px;">${g.ruoli.map(r=>`<span style="background:#DCEEFB; color:var(--ink); border-radius:6px; padding:4px 10px; font-size:13px; font-weight:700; letter-spacing:.2px; display:inline-block; text-align:center;">${r}</span>`).join('')}</div></td>
             <td><button style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:11px" onclick="removeGroupedTimelineRow('${encoded}')">rimuovi</button></td>
           </tr>
         `}).join('')}
