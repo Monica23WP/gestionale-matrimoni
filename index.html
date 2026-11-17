@@ -2274,6 +2274,12 @@ function renderTimelineByRole(w){
               </label>
             `).join('')}
           </div>
+          ${!state.timelinePlanB ? `
+            <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--wine); margin-bottom:10px; cursor:pointer;">
+              <input type="checkbox" id="timelineAlsoPlanB">
+              🌧️ Inserisci anche nel Piano B (pioggia), per le figure selezionate
+            </label>
+          ` : ''}
           ${tasks.length ? `<button class="btn-mini" onclick="copySelectedTimelineRows('${sel.replace(/'/g,"\\'")}')">Aggiungi le voci selezionate alle figure selezionate</button>` : ''}
         </div>
       ` : ''}
@@ -2291,12 +2297,18 @@ function copySelectedTimelineRows(sourceRoleId){
   if(!state.timelineRowsSelected || !state.timelineRowsSelected.size){ alert('Spunta prima almeno una voce già scritta da copiare.'); return; }
   const w = currentWedding();
   const store = tasksStore(w);
+  const alsoB = alsoPlanBChecked();
   const source = store[sourceRoleId] || [];
   const daCopiare = [...state.timelineRowsSelected].sort((a,b)=>a-b).map(i=>source[i]).filter(Boolean);
   targets.forEach(roleId=>{
     if(!store[roleId]) store[roleId] = [];
     daCopiare.forEach(t=> store[roleId].push({t: t.t, d: t.d, note: t.note||''}));
     store[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+    if(alsoB && !state.timelinePlanB){
+      if(!w.tasksPlanB[roleId]) w.tasksPlanB[roleId] = [];
+      daCopiare.forEach(t=> w.tasksPlanB[roleId].push({t: t.t, d: t.d, note: t.note||''}));
+      w.tasksPlanB[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+    }
   });
   persistWedding(w);
   state.timelineRowsSelected = new Set();
@@ -2325,6 +2337,10 @@ function getTimelineRoleCopyTargets(){
   if(!box) return [];
   return [...box.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.value);
 }
+function alsoPlanBChecked(){
+  const cb = document.getElementById('timelineAlsoPlanB');
+  return !!(cb && cb.checked);
+}
 function addTimelineRowRole(roleId){
   const t = document.getElementById('newTaskTimeRole').value.trim();
   const d = document.getElementById('newTaskDescRole').value.trim();
@@ -2332,11 +2348,17 @@ function addTimelineRowRole(roleId){
   if(!d){ alert('Serve almeno la descrizione della mansione.'); return; }
   const w = currentWedding();
   const store = tasksStore(w);
+  const alsoB = alsoPlanBChecked();
   const destinatari = [roleId, ...getTimelineRoleCopyTargets()];
   destinatari.forEach(r=>{
     if(!store[r]) store[r] = [];
     store[r].push({t: t || '—', d, note});
     store[r].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+    if(alsoB && !state.timelinePlanB){
+      if(!w.tasksPlanB[r]) w.tasksPlanB[r] = [];
+      w.tasksPlanB[r].push({t: t || '—', d, note});
+      w.tasksPlanB[r].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+    }
   });
   persistWedding(w);
   renderContent();
