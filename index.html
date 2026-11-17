@@ -2277,10 +2277,10 @@ function renderTimelineByRole(w){
           ${!state.timelinePlanB ? `
             <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--wine); margin-bottom:10px; cursor:pointer;">
               <input type="checkbox" id="timelineAlsoPlanB">
-              🌧️ Inserisci anche nel Piano B (pioggia), per le figure selezionate
+              🌧️ Inserisci anche nel Piano B (pioggia) — funziona da sola, anche senza spuntare altre figure
             </label>
           ` : ''}
-          ${tasks.length ? `<button class="btn-mini" onclick="copySelectedTimelineRows('${sel.replace(/'/g,"\\'")}')">Aggiungi le voci selezionate alle figure selezionate</button>` : ''}
+          ${tasks.length ? `<button class="btn-mini" onclick="copySelectedTimelineRows('${sel.replace(/'/g,"\\'")}')">Applica alle voci selezionate (figure spuntate e/o Piano B)</button>` : ''}
         </div>
       ` : ''}
     </div>
@@ -2293,13 +2293,19 @@ function toggleTimelineRowSelect(idx, checked){
 }
 function copySelectedTimelineRows(sourceRoleId){
   const targets = getTimelineRoleCopyTargets();
-  if(!targets.length){ alert('Seleziona almeno una figura a cui copiare le voci.'); return; }
+  const alsoB = alsoPlanBChecked();
+  if(!targets.length && !alsoB){ alert('Seleziona almeno una figura a cui copiare le voci, oppure spunta "anche nel Piano B".'); return; }
   if(!state.timelineRowsSelected || !state.timelineRowsSelected.size){ alert('Spunta prima almeno una voce già scritta da copiare.'); return; }
   const w = currentWedding();
   const store = tasksStore(w);
-  const alsoB = alsoPlanBChecked();
   const source = store[sourceRoleId] || [];
   const daCopiare = [...state.timelineRowsSelected].sort((a,b)=>a-b).map(i=>source[i]).filter(Boolean);
+  // Piano B per la figura corrente (indipendente dalla scelta di copiare o no su altre figure)
+  if(alsoB && !state.timelinePlanB){
+    if(!w.tasksPlanB[sourceRoleId]) w.tasksPlanB[sourceRoleId] = [];
+    daCopiare.forEach(t=> w.tasksPlanB[sourceRoleId].push({t: t.t, d: t.d, note: t.note||''}));
+    w.tasksPlanB[sourceRoleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
+  }
   targets.forEach(roleId=>{
     if(!store[roleId]) store[roleId] = [];
     daCopiare.forEach(t=> store[roleId].push({t: t.t, d: t.d, note: t.note||''}));
