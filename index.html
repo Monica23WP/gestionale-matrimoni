@@ -766,7 +766,7 @@
         <span class="role">Wedding Planner</span>
       </div>
     </div>
-    <button id="appModeToggleBtn" class="btn-mini" style="width:100%; margin-bottom:14px; text-align:center;" onclick="toggleAppMode()">📅 Disponibilità Fornitori</button>
+    <button id="appModeToggleBtn" class="btn-mini" style="width:100%; margin-bottom:14px; text-align:center;" onclick="toggleAppMode()">📅 Fornitori</button>
     <div class="tab-list" id="tabList"></div>
     <button id="newWeddingBtn" class="tab-new" onclick="createNewWedding()">+ Nuovo matrimonio</button>
     <div class="sidebar-foot">
@@ -1734,7 +1734,7 @@ function renderHomeScreen(){
 
         <div onclick="toggleHomeExpand('fornitori')" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:20px 4px; border-top:1px solid var(--rule); ${state.homeExpand==='fornitori'?'':'border-bottom:1px solid var(--rule);'}">
           <div>
-            <div style="font-family:'Arcon',sans-serif; font-size:16.5px; color:var(--ink);">Disponibilità Fornitori</div>
+            <div style="font-family:'Arcon',sans-serif; font-size:16.5px; color:var(--ink);">Fornitori</div>
             <div style="font-size:12px; color:var(--ink-soft); margin-top:3px;">${masterFornitori.length} fornitori censiti</div>
           </div>
           <span style="font-size:13px; color:var(--ink-soft);">${state.homeExpand==='fornitori'?'−':'→'}</span>
@@ -2805,7 +2805,7 @@ function renderPrincipale(w, guests){
             <input type="checkbox" ${(w.sposiFornitoriVisibili||[]).includes(f.id)?'checked':''} onchange="toggleSposiFornitoreVisibile('${f.id.replace(/'/g,"\\'")}',this.checked)">
             ${f.nome} <span style="color:var(--ink-soft); font-size:10.5px;">(${f.categoria})</span>
           </label>
-        `).join('') : `<span style="color:var(--ink-soft); font-size:12.5px;">Nessun fornitore ancora censito in "Disponibilità Fornitori".</span>`}
+        `).join('') : `<span style="color:var(--ink-soft); font-size:12.5px;">Nessun fornitore ancora censito in "Fornitori".</span>`}
       </div>
     </div>
     ` : ''}
@@ -3744,7 +3744,7 @@ function renderAll(){
   }
   // ripristina elementi eventualmente nascosti dalla vista Disponibilità Fornitori / Home
   const amb = document.getElementById('appModeToggleBtn');
-  if(amb){ amb.textContent = '📅 Disponibilità Fornitori'; amb.onclick = toggleAppMode; amb.style.display = (state.role==='planner' && !state.isPreview) ? '' : 'none'; }
+  if(amb){ amb.textContent = '📅 Fornitori'; amb.onclick = toggleAppMode; amb.style.display = (state.role==='planner' && !state.isPreview) ? '' : 'none'; }
   const et = document.getElementById('exportToolbar'); if(et) et.style.display = '';
   const eeb = document.getElementById('exportExcelBtn'); if(eeb) eeb.style.display = '';
   const ecb = document.getElementById('exportCsvBtn'); if(ecb) ecb.style.display = '';
@@ -4206,14 +4206,17 @@ function renderDisponibilitaScreen(){
   document.getElementById('exportCsvBtn').style.display = 'none';
 
   const listEl = document.getElementById('tabList');
+  const categorie = [...new Set(masterFornitori.map(f=>f.categoria||'Altro'))].sort((a,b)=>a.localeCompare(b,'it'));
   listEl.innerHTML = `
     <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px;">I tuoi fornitori</div>
-    ${masterFornitori.map(f=>`
-      <div class="mf-list-item ${f.id===state.selectedMasterFornitore?'active':''}" onclick="selectMasterFornitore('${f.id.replace(/'/g,"\\'")}')">
-        <span class="mf-cat">${f.categoria}</span>
-        <span class="mf-nome">${f.nome}</span>
-        <button class="mf-del" onclick="event.stopPropagation(); deleteMasterFornitore('${f.id.replace(/'/g,"\\'")}')">×</button>
-      </div>
+    ${categorie.map(cat=>`
+      <div class="mf-check-cat" style="margin:14px 6px 4px 6px;">${cat}</div>
+      ${masterFornitori.filter(f=>(f.categoria||'Altro')===cat).map(f=>`
+        <div class="mf-list-item ${f.id===state.selectedMasterFornitore?'active':''}" onclick="selectMasterFornitore('${f.id.replace(/'/g,"\\'")}')">
+          <span class="mf-nome">${f.nome}</span>
+          <button class="mf-del" onclick="event.stopPropagation(); deleteMasterFornitore('${f.id.replace(/'/g,"\\'")}')">×</button>
+        </div>
+      `).join('')}
     `).join('')}
     <button class="tab-new" style="margin-top:8px;" onclick="addMasterFornitore()">+ Aggiungi fornitore</button>
   `;
@@ -4221,7 +4224,7 @@ function renderDisponibilitaScreen(){
   if(!state.dispoView) state.dispoView = 'calendario';
   document.getElementById('weddingHead').innerHTML = `
     <div class="eyebrow">Database parallelo</div>
-    <h1>Disponibilità Fornitori</h1>
+    <h1>Fornitori</h1>
     <div class="meta">Calendario libero/occupato per ogni fornitore con cui lavori, indipendente dai singoli matrimoni.</div>
     <div style="display:flex; gap:8px; margin-top:14px;">
       <button class="btn-mini" style="background:${state.dispoView==='calendario'?'var(--ink)':'var(--white-ish)'}; color:${state.dispoView==='calendario'?'var(--white-ish)':'var(--ink)'};" onclick="setDispoView('calendario')">📅 Calendario singolo</button>
