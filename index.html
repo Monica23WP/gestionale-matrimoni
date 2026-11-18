@@ -3765,6 +3765,18 @@ function renderAll(){
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
 const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','fornitoriEmails','guests','moodboard','tasks','tasksPlanB','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles','indirizzi','cerimoniaDati'];
 
+// ============ INFORMATIVA PRIVACY — da aggiornare qui con il testo definitivo una volta validato da un legale/commercialista ============
+// Cambiando PRIVACY_POLICY_VERSION, a tutti i fornitori verrà richiesto di accettare di nuovo (utile se il testo cambia davvero).
+const PRIVACY_POLICY_VERSION = 'v1';
+const PRIVACY_POLICY_HTML = `
+  <p><strong>Titolare del trattamento</strong><br>Monica Coppolino, wedding planner — brand "Matrimoni Artigianali a Passu Lentu".</p>
+  <p><strong>Dati raccolti</strong><br>Nell'ambito dell'organizzazione del matrimonio, questo gestionale può contenere: dati identificativi e di contatto degli sposi, dati dell'evento (data, location, chiesa, timeline), nomi di genitori e testimoni, dati degli invitati, dati economici (budget, pagamenti), dati dei fornitori (contatti, note tecniche, disponibilità) e dati tecnici di accesso (email di login, data/ora di accesso).</p>
+  <p><strong>Finalità</strong><br>I dati sono trattati per organizzare e coordinare il matrimonio e per permettere a sposi e fornitori di accedere, ciascuno alla propria parte, al gestionale condiviso. Non vengono usati per marketing senza consenso specifico.</p>
+  <p><strong>Sicurezza</strong><br>I dati sono conservati su infrastruttura Google Firebase/Firestore, cifrati in transito e a riposo. L'accesso richiede autenticazione, e ogni fornitore vede solo i dati del matrimonio a cui è collegato e di propria competenza.</p>
+  <p><strong>Conservazione</strong><br>I dati sono conservati per la durata dell'incarico e per il periodo successivo necessario a eventuali obblighi contabili/fiscali.</p>
+  <p><strong>Diritti dell'interessato</strong><br>In qualsiasi momento è possibile chiedere al titolare l'accesso, la rettifica, la cancellazione o la limitazione del trattamento dei propri dati, scrivendo ai recapiti della wedding planner.</p>
+`;
+
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
 // Finché lasci "INSERISCI_QUI", l'app userà il salvataggio temporaneo di questa chat.
@@ -3804,6 +3816,14 @@ if(FIREBASE_READY){
         document.getElementById('loadingOverlay') && (document.getElementById('loadingOverlay').style.display='none');
         renderUnrecognizedScreen();
         return;
+      }
+      if(identity.role==='fornitore'){
+        const accettata = await checkPrivacyAccepted(user.email);
+        if(!accettata){
+          document.getElementById('loadingOverlay') && (document.getElementById('loadingOverlay').style.display='none');
+          renderPrivacyGateScreen(user.email);
+          return;
+        }
       }
       applyIdentity(identity);
       if(identity.role==='planner'){
@@ -4764,6 +4784,61 @@ function renderUnrecognizedScreen(){
   `);
   const sb = document.getElementById('subnav'); if(sb) sb.innerHTML='';
   const sd = document.getElementById('tabList'); if(sd) sd.innerHTML='';
+}
+
+async function checkPrivacyAccepted(email){
+  if(!FIREBASE_READY) return true; // senza Firebase non possiamo registrare l'accettazione: non blocchiamo il lavoro
+  try{
+    const doc = await db.collection('privacyAccettazioni').doc(email.trim().toLowerCase()).get();
+    return doc.exists && doc.data().versione === PRIVACY_POLICY_VERSION;
+  }catch(e){
+    console.error('Errore controllo accettazione privacy', e);
+    return true; // in caso di errore tecnico non blocchiamo l'accesso al lavoro del fornitore
+  }
+}
+
+function renderPrivacyGateScreen(email){
+  document.getElementById('content') && (document.getElementById('content').innerHTML = `
+    <div class="fornitore-card" style="max-width:580px; margin:40px auto;">
+      <h2>Informativa sulla privacy</h2>
+      <div class="criterio-note" style="margin-bottom:14px;">Prima di continuare, ti chiediamo di prendere visione di come vengono trattati i dati inseriti in questo gestionale.</div>
+      <div style="max-height:260px; overflow-y:auto; border:1px solid var(--rule); border-radius:8px; padding:14px 16px; font-size:12.5px; line-height:1.6; margin-bottom:16px; text-align:left; background:var(--white-ish);">
+        ${PRIVACY_POLICY_HTML}
+      </div>
+      <label style="display:flex; align-items:flex-start; gap:8px; font-size:12.5px; margin-bottom:16px; text-align:left; cursor:pointer;">
+        <input type="checkbox" id="privacyAcceptCheck" style="margin-top:3px;">
+        <span>Dichiaro di aver letto l'informativa e acconsento al trattamento dei miei dati come sopra descritto.</span>
+      </label>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-mini" style="flex:1;" onclick="confirmPrivacyAccept('${email.replace(/'/g,"\\'")}')">Accetto e continuo</button>
+        <button class="btn-mini" style="background:none; color:var(--ink-soft);" onclick="doLogout()">Esci</button>
+      </div>
+    </div>
+  `);
+  const sb = document.getElementById('subnav'); if(sb) sb.innerHTML='';
+  const sd = document.getElementById('tabList'); if(sd) sd.innerHTML='';
+}
+
+async function confirmPrivacyAccept(email){
+  const chk = document.getElementById('privacyAcceptCheck');
+  if(!chk || !chk.checked){ alert('Per continuare devi spuntare la casella di accettazione.'); return; }
+  try{
+    await db.collection('privacyAccettazioni').doc(email.trim().toLowerCase()).set({
+      email: email.trim().toLowerCase(),
+      versione: PRIVACY_POLICY_VERSION,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){
+    console.error('Errore salvataggio accettazione privacy', e);
+    alert('Non è stato possibile registrare l\'accettazione. Riprova.');
+    return;
+  }
+  identity = resolveIdentity(email);
+  applyIdentity(identity);
+  if(!accessLogged){ accessLogged = true; logAccess(identity, email); }
+  document.getElementById('loadingOverlay') && (document.getElementById('loadingOverlay').style.display='none');
+  renderAll();
+  renderSidebarFoot();
 }
 
 // ============ TIMELINE GENERALE (tutti i fornitori insieme) ============
