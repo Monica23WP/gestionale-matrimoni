@@ -1459,7 +1459,8 @@ function renderVetrinaFornitori(w){
   const mesiNomi = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 
   const groups = {};
-  combinati.forEach(f=>{ (groups[f.categoria||'Altro'] ||= []).push(f); });
+  combinati.forEach(f=>{ const cat = (f.categoria||'').trim() || 'Altro'; (groups[cat] ||= []).push(f); });
+  const categorieOrdinateVetrina = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'it'));
   return `
     <div class="criterio-note">Una selezione di fornitori di fiducia scelti per voi dalla vostra wedding planner. Il calendario mostra la loro disponibilità, in sola visualizzazione.</div>
     <div class="cal-header" style="max-width:320px;">
@@ -1475,10 +1476,10 @@ function renderVetrinaFornitori(w){
         ${(()=>{ const oggi=new Date().getFullYear(); let opts=''; for(let yy=oggi-1; yy<=oggi+5; yy++){ opts+=`<option value="${yy}" ${yy===vy?'selected':''}>${yy}</option>`; } return opts; })()}
       </select>
     </div>
-    ${Object.entries(groups).map(([cat,list])=>`
+    ${categorieOrdinateVetrina.map(cat=>`
       <div class="cat-block">
         <div class="cat-title"><h3>${cat}</h3></div>
-        ${list.map(f=>`
+        ${groups[cat].slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it')).map(f=>`
           <div class="fornitore-card" style="margin-bottom:14px;">
             <h2 style="font-size:17px;">${f.nome}</h2>
             ${f.contatto ? `<div class="cat">${f.contatto}</div>` : ''}
@@ -1750,12 +1751,13 @@ function renderFornitoriPreviewList(){
     return `<div style="padding:14px 4px 20px 16px; border-top:1px solid var(--rule); color:var(--ink-soft); font-size:13px;">Nessun fornitore censito ancora.</div>`;
   }
   const groups = {};
-  masterFornitori.forEach(f=>{ (groups[f.categoria] ||= []).push(f); });
+  masterFornitori.forEach(f=>{ const cat = (f.categoria||'').trim() || 'Altro'; (groups[cat] ||= []).push(f); });
+  const categorieOrdinate = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'it'));
   return `
     <div style="padding-bottom:16px;">
-      ${Object.entries(groups).map(([cat,list])=>`
+      ${categorieOrdinate.map(cat=>`
         <div style="padding:14px 4px 4px 16px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); border-top:1px solid var(--rule);">${cat}</div>
-        ${list.map(f=>`
+        ${groups[cat].slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it')).map(f=>`
           <div onclick="enterFornitoreCalendar('${f.id.replace(/'/g,"\\'")}')" style="cursor:pointer; padding:8px 4px 8px 16px;">
             <span style="font-family:'Arcon',sans-serif; font-size:14px; color:var(--ink);">${f.nome}</span>
           </div>
@@ -4206,12 +4208,13 @@ function renderDisponibilitaScreen(){
   document.getElementById('exportCsvBtn').style.display = 'none';
 
   const listEl = document.getElementById('tabList');
-  const categorie = [...new Set(masterFornitori.map(f=>f.categoria||'Altro'))].sort((a,b)=>a.localeCompare(b,'it'));
+  const catOf = (f) => (f.categoria||'').trim() || 'Altro';
+  const categorie = [...new Set(masterFornitori.map(catOf))].sort((a,b)=>a.localeCompare(b,'it'));
   listEl.innerHTML = `
     <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px;">I tuoi fornitori</div>
     ${categorie.map(cat=>`
       <div class="mf-check-cat" style="margin:14px 6px 4px 6px;">${cat}</div>
-      ${masterFornitori.filter(f=>(f.categoria||'Altro')===cat).map(f=>`
+      ${masterFornitori.filter(f=>catOf(f)===cat).sort((a,b)=>a.nome.localeCompare(b.nome,'it')).map(f=>`
         <div class="mf-list-item ${f.id===state.selectedMasterFornitore?'active':''}" onclick="selectMasterFornitore('${f.id.replace(/'/g,"\\'")}')">
           <span class="mf-nome">${f.nome}</span>
           <button class="mf-del" onclick="event.stopPropagation(); deleteMasterFornitore('${f.id.replace(/'/g,"\\'")}')">×</button>
@@ -4382,12 +4385,13 @@ function renderComparazioniView(){
 
   const listEl = document.getElementById('tabList');
   const groups = {};
-  masterFornitori.forEach(f=>{ (groups[f.categoria] ||= []).push(f); });
+  masterFornitori.forEach(f=>{ const cat = (f.categoria||'').trim() || 'Altro'; (groups[cat] ||= []).push(f); });
+  const categorieOrdinateComp = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'it'));
   listEl.innerHTML = `
     <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px;">Seleziona da confrontare</div>
-    ${Object.entries(groups).map(([cat,list])=>`
+    ${categorieOrdinateComp.map(cat=>`
       <div class="mf-check-cat">${cat}</div>
-      ${list.map(f=>`
+      ${groups[cat].slice().sort((a,b)=>a.nome.localeCompare(b.nome,'it')).map(f=>`
         <label class="mf-check-item">
           <input type="checkbox" ${state.comparazioneSelected.includes(f.id)?'checked':''} onchange="toggleComparazioneFornitore('${f.id.replace(/'/g,"\\'")}',this.checked)">
           <span style="font-size:13px; color:var(--ink);">${f.nome}</span>
