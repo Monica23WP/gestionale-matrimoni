@@ -4614,24 +4614,26 @@ function renderLoginScreen(){
   const logoSrc = document.querySelector('.brand img') ? document.querySelector('.brand img').src : '';
   return `
     <div style="max-width:680px; margin:48px auto 50px auto; text-align:center;">
-      <img src="${logoSrc}" alt="Monica Coppolino" style="width:120px; height:120px; margin:0 auto 26px auto; display:block;">
-      <div style="font-family:'Regencie',sans-serif; font-weight:300; font-size:18px; letter-spacing:0.16em; color:var(--gold); text-transform:uppercase; margin-bottom:26px;">
-        Monica Coppolino &nbsp;·&nbsp; Wedding Planner
-      </div>
-      <div style="font-family:'Arcon',sans-serif; font-size:29px; line-height:1.58; color:var(--ink); margin-bottom:32px;">
-        Vivere a Passu Lentu è una filosofia,<br>non una moda.
+      <div style="background:var(--ink); border-radius:14px; padding:44px 40px 40px 40px;">
+        <img src="${logoSrc}" alt="Monica Coppolino" style="width:120px; height:120px; margin:0 auto 26px auto; display:block;">
+        <div style="font-family:'Regencie',sans-serif; font-weight:300; font-size:18px; letter-spacing:0.16em; color:var(--gold); text-transform:uppercase; margin-bottom:26px;">
+          Monica Coppolino &nbsp;·&nbsp; Wedding Planner
+        </div>
+        <div style="font-family:'Arcon',sans-serif; font-size:29px; line-height:1.58; color:#FFFFFF; margin-bottom:0;">
+          Vivere a Passu Lentu è una filosofia,<br>non una moda.
+        </div>
       </div>
 
-      <div style="width:56px; height:2px; background:var(--gold); margin:0 auto 34px auto;"></div>
+      <div style="width:56px; height:2px; background:var(--gold); margin:34px auto 34px auto;"></div>
 
-      <div style="background:var(--ink); border-radius:14px; padding:56px 56px; text-align:left;">
-        <div style="font-family:'Arcon',sans-serif; font-size:24px; color:#FFFFFF; margin-bottom:8px;">Accedi</div>
-        <div style="font-size:13.5px; color:rgba(255,255,255,0.72); margin-bottom:30px;">Wedding planner, sposi e fornitori accedono da qui con le proprie credenziali.</div>
+      <div style="background:#FFFFFF; border:1px solid var(--rule); border-radius:12px; padding:46px 48px; text-align:left;">
+        <div style="font-family:'Arcon',sans-serif; font-size:22px; color:var(--ink); margin-bottom:8px;">Accedi</div>
+        <div style="font-size:13.5px; color:var(--ink-soft); margin-bottom:28px;">Wedding planner, sposi e fornitori accedono da qui con le proprie credenziali.</div>
         <div style="display:flex; flex-direction:column; gap:14px;">
-          <input type="email" id="loginEmail" placeholder="Email" style="padding:16px 18px; border:1px solid transparent; border-radius:8px; font-family:'Inter',sans-serif; font-size:16px; background:#FFFFFF; color:var(--ink);" onkeydown="if(event.key==='Enter') doLogin()">
-          <input type="password" id="loginPass" placeholder="Password" style="padding:16px 18px; border:1px solid transparent; border-radius:8px; font-family:'Inter',sans-serif; font-size:16px; background:#FFFFFF; color:var(--ink);" onkeydown="if(event.key==='Enter') doLogin()">
-          <button onclick="doLogin()" style="margin-top:6px; font-family:'Inter',sans-serif; font-size:16px; font-weight:700; padding:16px 18px; border-radius:8px; border:1px solid var(--gold); background:var(--gold); color:var(--ink); cursor:pointer;">Accedi</button>
-          <div id="loginError" style="color:#FFB0B0; font-size:13px;"></div>
+          <input type="email" id="loginEmail" placeholder="Email" style="padding:14px 16px; border:1px solid var(--rule); border-radius:7px; font-family:'Inter',sans-serif; font-size:15px;" onkeydown="if(event.key==='Enter') doLogin()">
+          <input type="password" id="loginPass" placeholder="Password" style="padding:14px 16px; border:1px solid var(--rule); border-radius:7px; font-family:'Inter',sans-serif; font-size:15px;" onkeydown="if(event.key==='Enter') doLogin()">
+          <button onclick="doLogin()" style="margin-top:6px; font-family:'Inter',sans-serif; font-size:15px; font-weight:600; padding:14px 18px; border-radius:7px; border:1px solid var(--ink); background:var(--ink); color:#FFFFFF; cursor:pointer;">Accedi</button>
+          <div id="loginError" style="color:var(--wine); font-size:13px;"></div>
         </div>
       </div>
 
