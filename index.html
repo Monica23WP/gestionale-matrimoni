@@ -736,6 +736,14 @@
     .mood-subnav button{ flex-shrink:0; white-space:nowrap; }
     table{ display:block; overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch; }
     .guest-form{ grid-template-columns:1fr 1fr; }
+    /* Impedisce lo zoom automatico di Safari/Chrome su iOS quando si tocca un campo:
+       un font-size sotto i 16px fa "entrare" la pagina nello zoom e lo schermo non torna
+       più a posto da solo — per questo qui forziamo 16px su tutti i campi editabili. */
+    input, select, textarea{ font-size:16px !important; }
+    .wedding-head .meta-input{ width:100% !important; }
+    .wedding-head .meta-fields{ gap:16px; }
+    .wedding-head .meta-fields > div{ flex:1 1 110px; max-width:170px; }
+    *{ max-width:100%; }
   }
 </style>
 </head>
