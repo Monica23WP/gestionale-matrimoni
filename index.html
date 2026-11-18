@@ -4748,6 +4748,80 @@ function updateEmergencyContact(i, field, value){
   persistWedding(w);
 }
 
+function renderIndirizziBlock(w, editable){
+  const ind = w.indirizzi || {casaSposa:'', casaSposo:'', chiesa:'', location:'', tempoSposaChiesa:'', tempoSposoChiesa:'', tempoChiesaLocation:''};
+  const mapsLink = (addr) => addr ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}` : '';
+  const dirLink = (a,b) => (a && b) ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(a)}&destination=${encodeURIComponent(b)}` : '';
+  const fields = [
+    {key:'casaSposa', label:'Casa della Sposa'},
+    {key:'casaSposo', label:'Casa dello Sposo'},
+    {key:'chiesa', label:'Chiesa'},
+    {key:'location', label:'Location'}
+  ];
+  const legs = [
+    {key:'tempoSposaChiesa', label:'Casa Sposa → Chiesa', from:'casaSposa', to:'chiesa'},
+    {key:'tempoSposoChiesa', label:'Casa Sposo → Chiesa', from:'casaSposo', to:'chiesa'},
+    {key:'tempoChiesaLocation', label:'Chiesa → Location', from:'chiesa', to:'location'}
+  ];
+  if(editable){
+    return `
+      <div class="controls-box" style="margin-top:14px; margin-bottom:18px;">
+        <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); display:block; margin-bottom:8px;">Indirizzi della giornata</label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start; margin-bottom:12px;">
+          ${fields.map(f=>`
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:10.5px; color:var(--ink-soft);">${f.label}</span>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <input type="text" value="${ind[f.key]||''}" placeholder="indirizzo" onchange="updateIndirizzo('${f.key}',this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; min-width:200px; font-size:12.5px;">
+                ${ind[f.key] ? `<a href="${mapsLink(ind[f.key])}" target="_blank" rel="noopener" style="font-size:11.5px; color:var(--ink); white-space:nowrap;">📍 Maps</a>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+          ${legs.map(l=>`
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:10.5px; color:var(--ink-soft);">${l.label} — tempo di percorrenza (opzionale)</span>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <input type="text" value="${ind[l.key]||''}" placeholder="es. 15 min" onchange="updateIndirizzo('${l.key}',this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; width:110px; font-size:12.5px;">
+                ${(ind[l.from] && ind[l.to]) ? `<a href="${dirLink(ind[l.from], ind[l.to])}" target="_blank" rel="noopener" style="font-size:11.5px; color:var(--ink); white-space:nowrap;">🧭 Indicazioni</a>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  const valorizzati = fields.filter(f=>ind[f.key]);
+  if(!valorizzati.length) return '';
+  return `
+    <div class="controls-box" style="margin-top:14px; margin-bottom:18px;">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); display:block; margin-bottom:8px;">Indirizzi della giornata</label>
+      <div style="display:flex; gap:18px; flex-wrap:wrap; margin-bottom:${legs.some(l=>ind[l.from]&&ind[l.to])?'10px':'0'};">
+        ${valorizzati.map(f=>`
+          <div style="font-size:12.5px;">
+            <span style="color:var(--ink-soft);">${f.label}:</span> ${ind[f.key]}
+            <a href="${mapsLink(ind[f.key])}" target="_blank" rel="noopener" style="color:var(--ink); margin-left:4px;">📍</a>
+          </div>
+        `).join('')}
+      </div>
+      ${legs.filter(l=>ind[l.from]&&ind[l.to]).map(l=>`
+        <div style="font-size:12px; color:var(--ink-soft); margin-top:4px;">
+          ${l.label}${ind[l.key]?` — ${ind[l.key]}`:''}
+          <a href="${dirLink(ind[l.from], ind[l.to])}" target="_blank" rel="noopener" style="color:var(--ink); margin-left:4px;">🧭 Indicazioni</a>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function updateIndirizzo(field, value){
+  const w = currentWedding();
+  if(!w.indirizzi) w.indirizzi = {};
+  w.indirizzi[field] = value;
+  persistWedding(w);
+  renderContent();
+}
+
 function encodeGroupItems(items){
   return items.map(it=>`${it.ref}:::${it.idx}`).join('|||');
 }
