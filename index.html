@@ -1784,6 +1784,11 @@ function enterWedding(i){
   state.weddingIndex=i; state.subtab='budget';
   renderAll();
   closeMobileNav();
+  // risincronizza subito sposiEmail/fornitoriEmails: sono i campi che le regole di sicurezza
+  // di Firestore usano per far vedere a sposi e fornitori il proprio matrimonio, quindi vanno
+  // tenuti aggiornati ogni volta che la wedding planner apre il matrimonio, non solo quando
+  // modifica qualcosa.
+  persistWedding(weddings[i]);
 }
 async function enterFornitoreCalendar(id){
   state.appMode='disponibilita';
