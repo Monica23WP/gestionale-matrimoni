@@ -3881,16 +3881,27 @@ async function persistMasterFornitore(f){
   }
 }
 
-function addMasterFornitore(){
-  const nome = prompt('Nome del fornitore (es. "Vanessa Ruggeri"):');
-  if(!nome) return;
-  const categoria = prompt('Categoria (es. Location, Fotografo, Make-up Artist):') || 'Altro';
+function showAddMasterFornitoreForm(){
+  state.addingMasterFornitore = true;
+  renderDisponibilitaScreen();
+}
+function cancelAddMasterFornitore(){
+  state.addingMasterFornitore = false;
+  renderDisponibilitaScreen();
+}
+function confirmAddMasterFornitore(){
+  const nomeEl = document.getElementById('newMfNome');
+  const catEl = document.getElementById('newMfCategoria');
+  const nome = (nomeEl ? nomeEl.value : '').trim();
+  if(!nome){ nomeEl && nomeEl.focus(); return; }
+  const categoria = (catEl ? catEl.value : '').trim() || 'Altro';
   let id = nome.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || ('fornitore-'+Date.now());
   if(masterFornitori.find(f=>f.id===id)) id = id + '-' + Date.now();
   const nuovo = { id, nome, categoria, contatto:'', email:'', sito:'', social:[], video:[], foto:[], calendario:{} };
   masterFornitori.push(nuovo);
   persistMasterFornitore(nuovo);
   state.selectedMasterFornitore = id;
+  state.addingMasterFornitore = false;
   renderAll();
 }
 
@@ -4221,8 +4232,30 @@ function renderDisponibilitaScreen(){
         </div>
       `).join('')}
     `).join('')}
-    <button class="tab-new" style="margin-top:8px;" onclick="addMasterFornitore()">+ Aggiungi fornitore</button>
+    ${state.addingMasterFornitore ? `
+      <div class="controls-box" style="margin-top:10px;">
+        <label style="font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:5px;">Nuovo fornitore</label>
+        <input type="text" id="newMfNome" placeholder="Nome (es. Vanessa Ruggeri)" style="width:100%; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; font-size:13px; margin-bottom:6px;">
+        <input type="text" id="newMfCategoria" list="mfCategorieEsistenti" placeholder="Categoria (es. Fotografo)" style="width:100%; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; font-size:13px; margin-bottom:8px;">
+        <datalist id="mfCategorieEsistenti">${categorie.map(c=>`<option value="${c}">`).join('')}</datalist>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-mini" onclick="confirmAddMasterFornitore()" style="flex:1;">Salva</button>
+          <button class="btn-mini" onclick="cancelAddMasterFornitore()" style="background:none; color:var(--ink-soft);">Annulla</button>
+        </div>
+      </div>
+    ` : `
+      <button class="tab-new" style="margin-top:8px;" onclick="showAddMasterFornitoreForm()">+ Aggiungi fornitore</button>
+    `}
   `;
+  if(state.addingMasterFornitore){
+    const nomeInput = document.getElementById('newMfNome');
+    if(nomeInput){
+      nomeInput.focus();
+      nomeInput.onkeydown = (e)=>{ if(e.key==='Enter') document.getElementById('newMfCategoria').focus(); };
+      const catInput = document.getElementById('newMfCategoria');
+      if(catInput) catInput.onkeydown = (e)=>{ if(e.key==='Enter') confirmAddMasterFornitore(); };
+    }
+  }
 
   if(!state.dispoView) state.dispoView = 'calendario';
   document.getElementById('weddingHead').innerHTML = `
