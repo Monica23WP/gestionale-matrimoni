@@ -992,6 +992,11 @@ const BASE_TIMELINE_ROLES = ['Location','Catering','Musica','Fotografo','Videoma
 function slugRuolo(label){
   return label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
 }
+function guessTimelineRoleId(w, cat){
+  const slugCat = slugRuolo(cat||'');
+  const auto = (w.timelineRoles||[]).find(r=> r.id===slugCat || slugRuolo(r.label)===slugCat);
+  return auto ? auto.id : null;
+}
 function normalizeWedding(w){
   if(!w.rsvpChannel) w.rsvpChannel = {tipo:'', valore:''};
   if(w.sposiEmail===undefined) w.sposiEmail = '';
@@ -1011,6 +1016,7 @@ function normalizeWedding(w){
     if(!f.telefoni) f.telefoni = [];
     if(f.visibileSposi===undefined) f.visibileSposi = false;
     if(f.masterLinkId===undefined) f.masterLinkId = null;
+    if(f.timelineRoleId===undefined) f.timelineRoleId = guessTimelineRoleId(w, f.cat);
   });
   (w.guests||[]).forEach(g=>{
     if(g.rsvp===undefined) g.rsvp = 'in attesa';
@@ -2177,7 +2183,16 @@ function renderFornitoreView(w){
   }
 
   const f = w.fornitori.find(x=>x.ref===state.supplierRef);
-  const tasks = w.tasks[state.supplierRef] || [];
+  const roleId = f.timelineRoleId;
+  const tasksA = roleId ? (w.tasks[roleId] || []) : [];
+  const tasksB = roleId ? (w.tasksPlanB[roleId] || []) : [];
+
+  const renderTaskRows = (tasks)=> tasks.length ? tasks.map(t=>`
+        <div class="task-row">
+          <div class="task-time">${t.t}</div>
+          <div class="task-text">${t.d}${t.note ? `<div style="font-size:12px; font-weight:700; font-style:italic; color:var(--ink); margin-top:2px;">${t.note}</div>` : ''}</div>
+        </div>
+      `).join('') : `<div class="empty-state" style="margin-top:10px">Nessuna voce inserita ancora.</div>`;
 
   return selectHtml + renderEmergencyBlock(w, false) + `
     <div class="fornitore-card">
@@ -2188,13 +2203,12 @@ function renderFornitoreView(w){
         <div><div class="k">Location</div><div class="v">${w.location}</div></div>
         <div><div class="k">Stato</div><div class="v">${f.prenotato?'Confermato':(f.contattato?'Contattato, in attesa di conferma':'Da contattare')}</div></div>
       </div>
-      <div class="cat-title"><h3 style="font-size:14px">Timeline / cosa fare</h3></div>
-      ${tasks.length ? tasks.map(t=>`
-        <div class="task-row">
-          <div class="task-time">${t.t}</div>
-          <div class="task-text">${t.d}</div>
-        </div>
-      `).join('') : `<div class="empty-state" style="margin-top:10px">Nessuna timeline caricata ancora per questo fornitore — il wedding planner non ha inserito task specifici.</div>`}
+      ${!roleId ? `<div class="empty-state" style="margin-top:14px">La wedding planner non ha ancora collegato questa scheda a una figura della Timeline — la timeline non è ancora visibile.</div>` : `
+        <div class="cat-title"><h3 style="font-size:14px">☀️ Timeline / cosa fare — giornata regolare</h3></div>
+        ${renderTaskRows(tasksA)}
+        <div class="cat-title" style="margin-top:18px;"><h3 style="font-size:14px">🌧️ Timeline — Piano B in caso di pioggia</h3></div>
+        ${renderTaskRows(tasksB)}
+      `}
       <div class="cat-title" style="margin-top:18px;"><h3 style="font-size:14px">Le tue note</h3></div>
       <div class="criterio-note" style="margin-bottom:8px;">Qui puoi lasciare note utili per la wedding planner (es. orari di arrivo, esigenze particolari). Non puoi modificare altro in questa scheda.</div>
       <textarea id="fornitoreNoteInput" rows="3" placeholder="Scrivi qui le tue note..." onchange="updateFornitoreField('${f.ref.replace(/'/g,"\\'")}','note',this.value)" style="width:100%; padding:10px; border:1px solid var(--rule); border-radius:8px; font-family:'Inter',sans-serif; font-size:13px; resize:vertical;">${f.note||''}</textarea>
@@ -2394,6 +2408,14 @@ function renderSchedeFornitori(w){
         <input type="email" value="${f.email||''}" placeholder="es. lamimosa@fiori.it" onchange="updateFornitoreField('${f.ref}','email',this.value)" style="width:100%; max-width:320px; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--white-ish);">
       </div>
       <div class="controls-box">
+        <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Figura collegata nella Timeline</label>
+        <select onchange="updateFornitoreField('${f.ref.replace(/'/g,"\\'")}','timelineRoleId', this.value||null)" style="width:100%; max-width:320px; font-size:12.5px; padding:7px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--white-ish);">
+          <option value="">— nessuna, non mostrare timeline —</option>
+          ${w.timelineRoles.map(r=>`<option value="${r.id}" ${f.timelineRoleId===r.id?'selected':''}>${r.label}</option>`).join('')}
+        </select>
+        <div style="font-size:11px; color:var(--ink-soft); margin-top:5px;">Collega questo fornitore alla figura di Timeline giusta (es. "Flower Designer") perché possa vedere nella sua scheda gli orari e le mansioni che scrivi in Timeline / Timeline Generale per quella figura.</div>
+      </div>
+      <div class="controls-box">
         <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Numeri di cellulare</label>
         <div style="display:flex; flex-wrap:wrap; gap:8px;">
           ${(f.telefoni||[]).map((tel,tIdx)=>`
@@ -2455,7 +2477,7 @@ function quickAddFornitore(cat, nome){
   if(w.fornitori.find(f=>f.cat===cat && f.nome===nome)){ alert(`"${nome}" è già stato aggiunto.`); return; }
   let ref = nome;
   if(w.fornitori.find(f=>f.ref===ref)) ref = ref + ' (2)';
-  w.fornitori.push({cat, nome, ref, email:'', contattato:true, prenotato:true, note:'', schedaTecnica:[], telefoni:[], visibileSposi:false, masterLinkId:null});
+  w.fornitori.push({cat, nome, ref, email:'', contattato:true, prenotato:true, note:'', schedaTecnica:[], telefoni:[], visibileSposi:false, masterLinkId:null, timelineRoleId:guessTimelineRoleId(w, cat)});
   w.tasks[ref] = w.tasks[ref] || [];
   persistWedding(w);
   state.schedeSupplier = ref;
@@ -2468,7 +2490,7 @@ function quickAddFornitoreTeam(){
   const w = currentWedding();
   let ref = nome;
   if(w.fornitori.find(f=>f.ref===ref)) ref = ref + ' (2)';
-  w.fornitori.push({cat:'Team Wedding Planner', nome: ruolo, ref, email:'', contattato:true, prenotato:true, note:'', schedaTecnica:[], telefoni:[], visibileSposi:false, masterLinkId:null});
+  w.fornitori.push({cat:'Team Wedding Planner', nome: ruolo, ref, email:'', contattato:true, prenotato:true, note:'', schedaTecnica:[], telefoni:[], visibileSposi:false, masterLinkId:null, timelineRoleId:guessTimelineRoleId(w, ruolo)});
   w.tasks[ref] = w.tasks[ref] || [];
   persistWedding(w);
   state.schedeSupplier = ref;
@@ -2485,7 +2507,7 @@ function addFornitore(){
   }
   if(!ref) ref = nome;
   const w = currentWedding();
-  w.fornitori.push({cat, nome, ref, email, contattato:false, prenotato:false, note:'', schedaTecnica:[], telefoni:[], visibileSposi:false, masterLinkId:null});
+  w.fornitori.push({cat, nome, ref, email, contattato:false, prenotato:false, note:'', schedaTecnica:[], telefoni:[], visibileSposi:false, masterLinkId:null, timelineRoleId:guessTimelineRoleId(w, cat)});
   w.tasks[ref] = w.tasks[ref] || [];
   persistWedding(w);
   renderContent();
@@ -3624,7 +3646,10 @@ async function persistMasterFornitore(f){
     const payload = {};
     MASTER_FORNITORE_FIELDS.forEach(k=> payload[k] = f[k]);
     await db.collection('fornitoriGlobali').doc(f.id).set(payload, {merge:true});
-  }catch(e){ console.error('Errore salvataggio fornitore globale', e); }
+  }catch(e){
+    console.error('Errore salvataggio fornitore globale', e);
+    alert('Attenzione: questa modifica NON è stata salvata (errore di permessi o di connessione). Riprova, e se il problema continua segnalalo a Monica.');
+  }
 }
 
 function addMasterFornitore(){
