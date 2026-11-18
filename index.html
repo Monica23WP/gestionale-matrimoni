@@ -3806,7 +3806,14 @@ if(FIREBASE_READY){
         return;
       }
       applyIdentity(identity);
-      if(identity.role==='planner') syncFornitoreCalendars();
+      if(identity.role==='planner'){
+        syncFornitoreCalendars();
+        // risincronizza in automatico, su TUTTI i matrimoni, i campi sposiEmail/fornitoriEmails
+        // che le regole di sicurezza di Firestore usano per far vedere a sposi e fornitori il
+        // proprio matrimonio — così basta che la wedding planner apra l'app (cosa che fa comunque
+        // ogni volta) e non serve entrare manualmente in ciascun matrimonio uno per uno.
+        weddings.forEach(w=>{ persistWedding(w); });
+      }
       if(!accessLogged){ accessLogged = true; logAccess(identity, user.email); }
     } else {
       identity = null;
