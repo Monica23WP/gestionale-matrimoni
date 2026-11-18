@@ -2324,6 +2324,7 @@ function renderFornitoreView(w){
         <div><div class="k">Stato</div><div class="v">${f.prenotato?'Confermato':(f.contattato?'Contattato, in attesa di conferma':'Da contattare')}</div></div>
       </div>
       ${renderIndirizziBlock(w, false)}
+      ${renderCerimoniaDatiBlock(w, false)}
       ${(f.schedaTecnica && f.schedaTecnica.length) ? `
         <div class="cat-title" style="margin-top:6px;"><h3 style="font-size:14px">Scheda tecnica</h3></div>
         <table>
