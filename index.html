@@ -4614,17 +4614,15 @@ function renderLoginScreen(){
   const logoSrc = document.querySelector('.brand img') ? document.querySelector('.brand img').src : '';
   return `
     <div style="max-width:680px; margin:48px auto 50px auto; text-align:center;">
-      <div style="background:var(--ink); border-radius:14px; padding:44px 40px 40px 40px;">
-        <img src="${logoSrc}" alt="Monica Coppolino" style="width:120px; height:120px; margin:0 auto 26px auto; display:block;">
-        <div style="font-family:'Regencie',sans-serif; font-weight:300; font-size:18px; letter-spacing:0.16em; color:var(--gold); text-transform:uppercase; margin-bottom:26px;">
-          Monica Coppolino &nbsp;·&nbsp; Wedding Planner
-        </div>
-        <div style="font-family:'Arcon',sans-serif; font-size:29px; line-height:1.58; color:#FFFFFF; margin-bottom:0;">
-          Vivere a Passu Lentu è una filosofia,<br>non una moda.
-        </div>
+      <img src="${logoSrc}" alt="Monica Coppolino" style="width:120px; height:120px; margin:0 auto 26px auto; display:block;">
+      <div style="font-family:'Regencie',sans-serif; font-weight:300; font-size:18px; letter-spacing:0.16em; color:var(--gold); text-transform:uppercase; margin-bottom:26px;">
+        Monica Coppolino &nbsp;·&nbsp; Wedding Planner
+      </div>
+      <div style="font-family:'Arcon',sans-serif; font-size:29px; line-height:1.58; color:var(--ink); margin-bottom:32px;">
+        Vivere a Passu Lentu è una filosofia,<br>non una moda.
       </div>
 
-      <div style="width:56px; height:2px; background:var(--gold); margin:34px auto 34px auto;"></div>
+      <div style="width:56px; height:2px; background:var(--gold); margin:0 auto 34px auto;"></div>
 
       <div style="background:#FFFFFF; border:1px solid var(--rule); border-radius:12px; padding:46px 48px; text-align:left;">
         <div style="font-family:'Arcon',sans-serif; font-size:22px; color:var(--ink); margin-bottom:8px;">Accedi</div>
