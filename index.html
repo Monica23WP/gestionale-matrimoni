@@ -1770,6 +1770,7 @@ function updateWeddingField(field, value){
   currentWedding()[field] = value;
   persistWedding(currentWedding());
   renderSidebar();
+  if(field==='date' || field==='location' || field==='names') syncFornitoreCalendars();
 }
 
 function renderSubnav(){
@@ -2483,6 +2484,7 @@ function quickAddFornitore(cat, nome){
   persistWedding(w);
   state.schedeSupplier = ref;
   renderContent();
+  syncFornitoreCalendars();
 }
 function quickAddFornitoreTeam(){
   const nome = prompt('Nome della persona del team (es. "Giulia Rossi"):');
@@ -2512,6 +2514,7 @@ function addFornitore(){
   w.tasks[ref] = w.tasks[ref] || [];
   persistWedding(w);
   renderContent();
+  syncFornitoreCalendars();
 }
 function updateFornitoreByIndex(idx, field, value){
   const w = currentWedding();
@@ -2532,16 +2535,19 @@ function removeFornitore(idx){
   w.fornitori.splice(idx,1);
   persistWedding(w);
   renderContent();
+  syncFornitoreCalendars();
 }
 function toggleFornitoreFlag(ref, field, value){
   const f = currentWedding().fornitori.find(x=>x.ref===ref);
   f[field] = value;
   persistWedding(currentWedding());
+  if(field==='prenotato') syncFornitoreCalendars();
 }
 function updateFornitoreField(ref, field, value){
   const f = currentWedding().fornitori.find(x=>x.ref===ref);
   f[field] = value;
   persistWedding(currentWedding());
+  if(field==='email' || field==='masterLinkId') syncFornitoreCalendars();
 }
 function addFornitoreTelefono(ref){
   const input = document.getElementById('newTelefonoFornitore');
@@ -3574,6 +3580,7 @@ if(FIREBASE_READY){
         return;
       }
       applyIdentity(identity);
+      if(identity.role==='planner') syncFornitoreCalendars();
       if(!accessLogged){ accessLogged = true; logAccess(identity, user.email); }
     } else {
       identity = null;
@@ -3681,6 +3688,69 @@ function updateMasterFornitoreField(id, field, value){
   if(!f) return;
   f[field] = value;
   persistMasterFornitore(f);
+}
+
+// ============ SINCRONIZZAZIONE AUTOMATICA: impegni confermati nei matrimoni → calendario di disponibilità globale ============
+function findMasterForFornitore(f){
+  return (f.masterLinkId && masterFornitori.find(mf=>mf.id===f.masterLinkId))
+    || (f.email ? masterFornitori.find(mf=>mf.email && mf.email.toLowerCase()===f.email.toLowerCase()) : null)
+    || null;
+}
+const MESI_IT = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+function parseWeddingDateToISO(str){
+  if(!str) return null;
+  str = str.trim();
+  let m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return str;
+  m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+  m = str.match(/^(\d{1,2})\s+([a-zà-ùA-ZÀ-Ù]+)\s+(\d{4})$/);
+  if(m){
+    const meseIdx = MESI_IT.findIndex(x=> x===m[2].toLowerCase());
+    if(meseIdx>=0) return `${m[3]}-${String(meseIdx+1).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+  }
+  return null;
+}
+// Per ogni fornitore confermato (prenotato) in un matrimonio, se è collegato a un profilo globale
+// (via masterLinkId o email), segna automaticamente quella data come "occupato" nel SUO calendario di
+// disponibilità, col nome della location — senza che la wedding planner debba inserirlo due volte.
+// Le voci inserite così sono marcate "auto": se il fornitore viene sprenotato o la data cambia, vengono tolte da sole.
+async function syncFornitoreCalendars(){
+  if(!masterFornitori.length || !weddings.length) return;
+  const toSave = new Set();
+  masterFornitori.forEach(mf=>{
+    if(!mf.calendario) return;
+    Object.keys(mf.calendario).forEach(dateStr=>{
+      const voce = mf.calendario[dateStr];
+      if(voce && voce.auto && voce.weddingId){
+        const ancoraValida = weddings.some(w=> w.id===voce.weddingId && parseWeddingDateToISO(w.date)===dateStr && (w.fornitori||[]).some(f=> f.prenotato && findMasterForFornitore(f)===mf));
+        if(!ancoraValida){ delete mf.calendario[dateStr]; toSave.add(mf.id); }
+      }
+    });
+  });
+  weddings.forEach(w=>{
+    const dateISO = parseWeddingDateToISO(w.date);
+    if(!dateISO) return;
+    (w.fornitori||[]).forEach(f=>{
+      if(!f.prenotato) return;
+      const mf = findMasterForFornitore(f);
+      if(!mf) return;
+      if(!mf.calendario) mf.calendario = {};
+      const luogo = w.location ? `${w.location} — ${w.names}` : w.names;
+      const esistente = mf.calendario[dateISO];
+      if(!esistente || esistente.auto){
+        if(!esistente || esistente.stato!=='occupato' || esistente.luogo!==luogo || esistente.weddingId!==w.id){
+          mf.calendario[dateISO] = {stato:'occupato', luogo, auto:true, weddingId:w.id};
+          toSave.add(mf.id);
+        }
+      }
+    });
+  });
+  for(const id of toSave){
+    const mf = masterFornitori.find(x=>x.id===id);
+    if(mf) await persistMasterFornitore(mf);
+  }
+  if(toSave.size) renderAll();
 }
 
 // ============ PORTFOLIO FORNITORE GLOBALE (email accesso, sito, social, video, foto) ============
@@ -4219,7 +4289,7 @@ function resolveIdentity(email){
   const weddingAssignments = [];
   weddings.forEach((w,i)=>{
     const f = (w.fornitori||[]).find(x=>(x.email||'').trim().toLowerCase()===email);
-    if(f) weddingAssignments.push({weddingIndex:i, supplierRef:f.ref, weddingNames:w.names});
+    if(f) weddingAssignments.push({weddingIndex:i, supplierRef:f.ref, weddingNames:w.names, cat:f.cat});
   });
   if(masterMatch || weddingAssignments.length){
     return { role:'fornitore', email, masterFornitoreId: masterMatch ? masterMatch.id : null, weddingAssignments };
@@ -4263,6 +4333,14 @@ async function logAccess(id, email){
   }catch(e){ console.error('Errore log accesso', e); }
 }
 
+function fornitoreCategoriaLabel(id){
+  if(!id) return 'Fornitore';
+  const master = id.masterFornitoreId ? masterFornitori.find(m=>m.id===id.masterFornitoreId) : null;
+  if(master && master.categoria) return master.categoria;
+  const assign = (id.weddingAssignments||[]).find(a=>a.cat);
+  if(assign) return assign.cat;
+  return 'Fornitore';
+}
 function setSaveStatus(text, color){
   const el = document.getElementById('saveStatus');
   if(el){ el.textContent = '● ' + text; el.style.color = color; }
@@ -4353,7 +4431,7 @@ function renderSidebarFoot(){
     if(roleWrap) roleWrap.style.display = 'none';
     if(badge) badge.style.display = '';
     if(badgeText && identity){
-      const ruoloLabel = identity.role==='planner' ? 'Wedding Planner' : identity.role==='fornitore' ? `Fornitore — ${identity.supplierRef}` : 'Sposi';
+      const ruoloLabel = identity.role==='planner' ? 'Wedding Planner' : identity.role==='fornitore' ? `Fornitore — ${fornitoreCategoriaLabel(identity)}` : 'Sposi';
       badgeText.textContent = ruoloLabel;
     }
     const isPlanner = identity && identity.role==='planner';
@@ -4363,7 +4441,7 @@ function renderSidebarFoot(){
   }
   if(!el) return;
   if(FIREBASE_READY && currentUser && identity){
-    const ruoloLabel = identity.role==='planner' ? 'Wedding Planner' : identity.role==='fornitore' ? `Fornitore — ${identity.supplierRef}` : 'Sposi';
+    const ruoloLabel = identity.role==='planner' ? 'Wedding Planner' : identity.role==='fornitore' ? `Fornitore — ${fornitoreCategoriaLabel(identity)}` : 'Sposi';
     el.innerHTML = `Connessa come <b>${currentUser.email}</b><br>${ruoloLabel} · <button onclick="doLogout()" style="border:none;background:none;color:var(--wine);cursor:pointer;text-decoration:underline;font-size:10.5px;">Esci</button>`;
   } else if(FIREBASE_READY){
     el.innerHTML = `Non connessa`;
