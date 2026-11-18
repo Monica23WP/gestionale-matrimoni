@@ -1008,6 +1008,7 @@ function normalizeWedding(w){
   if(!w.guests) w.guests = [];
   if(!w.tasks) w.tasks = {};
   if(!w.tasksPlanB) w.tasksPlanB = {};
+  if(!w.fornitoriEmails) w.fornitoriEmails = [];
   if(!w.timelineRoles){
     w.timelineRoles = BASE_TIMELINE_ROLES.map(label=>({id:slugRuolo(label), label}));
   }
@@ -3533,7 +3534,7 @@ function renderAll(){
 }
 
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
-const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','guests','moodboard','tasks','tasksPlanB','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles'];
+const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','fornitoriEmails','guests','moodboard','tasks','tasksPlanB','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles'];
 
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
@@ -4271,6 +4272,9 @@ async function persistWedding(w){
   if(!w) return;
   try{
     setSaveStatus('Salvataggio…', 'var(--ochre)');
+    // tenuto sempre aggiornato per permettere alle regole di sicurezza di Firestore di riconoscere
+    // i fornitori autorizzati a scrivere la propria scheda, senza dover leggere dentro l'array "fornitori"
+    w.fornitoriEmails = (w.fornitori||[]).map(f=>(f.email||'').trim().toLowerCase()).filter(Boolean);
     const payload = {};
     let fieldsToSave = PERSIST_FIELDS;
     if(FIREBASE_READY && identity){
