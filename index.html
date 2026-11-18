@@ -4610,31 +4610,38 @@ function renderSidebarFoot(){
 function renderLoginScreen(){
   const logoSrc = document.querySelector('.brand img') ? document.querySelector('.brand img').src : '';
   return `
-    <div style="max-width:440px; margin:64px auto 48px auto; text-align:center;">
-      <img src="${logoSrc}" alt="Monica Coppolino" style="width:64px; height:64px; margin:0 auto 24px auto; display:block;">
-      <div style="font-family:'Regencie',sans-serif; font-weight:300; font-size:11px; letter-spacing:0.2em; color:var(--gold); text-transform:uppercase; margin-bottom:24px;">
+    <div style="max-width:600px; margin:56px auto 50px auto; text-align:center;">
+      <img src="${logoSrc}" alt="Monica Coppolino" style="width:92px; height:92px; margin:0 auto 28px auto; display:block;">
+      <div style="font-family:'Regencie',sans-serif; font-weight:300; font-size:15px; letter-spacing:0.18em; color:var(--gold); text-transform:uppercase; margin-bottom:28px;">
         Monica Coppolino &nbsp;·&nbsp; Wedding Planner
       </div>
-      <div style="font-family:'Arcon',sans-serif; font-size:19px; line-height:1.62; color:var(--ink); margin-bottom:36px;">
+      <div style="font-family:'Arcon',sans-serif; font-size:25px; line-height:1.6; color:var(--ink); margin-bottom:32px;">
         Vivere a Passu Lentu è una filosofia,<br>non una moda.
       </div>
-      <div style="width:40px; height:1px; background:var(--gold); margin:0 auto 36px auto;"></div>
 
-      <div style="background:#FFFFFF; border:1px solid var(--rule); border-radius:10px; padding:32px 30px; text-align:left;">
-        <div style="font-family:'Arcon',sans-serif; font-size:17px; color:var(--ink); margin-bottom:6px;">Accedi</div>
-        <div style="font-size:12px; color:var(--ink-soft); margin-bottom:22px;">Wedding planner, sposi e fornitori accedono da qui con le proprie credenziali.</div>
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          <input type="email" id="loginEmail" placeholder="Email" style="padding:10px 12px; border:1px solid var(--rule); border-radius:6px; font-family:'Inter',sans-serif; font-size:13px;" onkeydown="if(event.key==='Enter') doLogin()">
-          <input type="password" id="loginPass" placeholder="Password" style="padding:10px 12px; border:1px solid var(--rule); border-radius:6px; font-family:'Inter',sans-serif; font-size:13px;" onkeydown="if(event.key==='Enter') doLogin()">
-          <button class="btn-mini" onclick="doLogin()" style="margin-top:6px;">Accedi</button>
-          <div id="loginError" style="color:var(--wine); font-size:12px;"></div>
+      <svg width="100%" height="60" viewBox="0 0 440 52" style="display:block; margin:0 auto 36px auto; max-width:400px; overflow:visible;">
+        <path d="M0,27 C40,5 80,49 120,27 C160,5 200,49 240,27 C280,5 320,49 360,27 C385,15 405,39 440,27" fill="none" stroke="#2D337A" stroke-width="1.5" opacity="0.55"/>
+        <path d="M0,25 C40,3 80,47 120,25 C160,3 200,47 240,25 C280,3 320,47 360,25 C385,13 405,37 440,25" fill="none" stroke="#EEB549" stroke-width="1.5"/>
+        <circle cx="120" cy="26" r="3" fill="#EEB549"/>
+        <circle cx="240" cy="26" r="3" fill="#2D337A"/>
+        <circle cx="360" cy="26" r="3" fill="#EEB549"/>
+      </svg>
+
+      <div style="background:#FFFFFF; border:1px solid var(--rule); border-radius:12px; padding:46px 48px; text-align:left;">
+        <div style="font-family:'Arcon',sans-serif; font-size:22px; color:var(--ink); margin-bottom:8px;">Accedi</div>
+        <div style="font-size:13.5px; color:var(--ink-soft); margin-bottom:28px;">Wedding planner, sposi e fornitori accedono da qui con le proprie credenziali.</div>
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <input type="email" id="loginEmail" placeholder="Email" style="padding:14px 16px; border:1px solid var(--rule); border-radius:7px; font-family:'Inter',sans-serif; font-size:15px;" onkeydown="if(event.key==='Enter') doLogin()">
+          <input type="password" id="loginPass" placeholder="Password" style="padding:14px 16px; border:1px solid var(--rule); border-radius:7px; font-family:'Inter',sans-serif; font-size:15px;" onkeydown="if(event.key==='Enter') doLogin()">
+          <button onclick="doLogin()" style="margin-top:6px; font-family:'Inter',sans-serif; font-size:15px; font-weight:600; padding:14px 18px; border-radius:7px; border:1px solid var(--ink); background:var(--ink); color:#FFFFFF; cursor:pointer;">Accedi</button>
+          <div id="loginError" style="color:var(--wine); font-size:13px;"></div>
         </div>
       </div>
 
-      <div style="display:flex; justify-content:center; gap:10px; margin-top:28px; flex-wrap:wrap;">
-        <span style="font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); border:1px solid var(--rule); border-radius:20px; padding:6px 14px;">Wedding Planner</span>
-        <span style="font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); border:1px solid var(--rule); border-radius:20px; padding:6px 14px;">Sposi</span>
-        <span style="font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); border:1px solid var(--rule); border-radius:20px; padding:6px 14px;">Fornitore</span>
+      <div style="display:flex; justify-content:center; gap:12px; margin-top:32px; flex-wrap:wrap;">
+        <span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); border:1px solid var(--rule); border-radius:20px; padding:8px 18px;">Wedding Planner</span>
+        <span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); border:1px solid var(--rule); border-radius:20px; padding:8px 18px;">Sposi</span>
+        <span style="font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); border:1px solid var(--rule); border-radius:20px; padding:8px 18px;">Fornitore</span>
       </div>
     </div>
   `;
