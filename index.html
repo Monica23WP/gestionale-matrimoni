@@ -64,7 +64,7 @@
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
-    background:var(--paper-dark);
+    background:#FFFFFF;
     color:var(--ink);
     font-family:'Inter', sans-serif;
     min-height:100vh;
@@ -78,21 +78,14 @@
   .sidebar{
     width:260px;
     flex-shrink:0;
-    background:var(--paper-dark);
+    background:#FFFFFF;
     padding:28px 0 28px 18px;
     border-right:1px solid var(--rule);
     display:flex;
     flex-direction:column;
   }
   .maiolica-strip{
-    height:16px;
-    margin:-28px -0px 16px -18px;
-    width:calc(100% + 18px);
-    background-image:var(--maiolica-url);
-    background-repeat:repeat-x;
-    background-size:auto 16px;
-    background-position:left center;
-    opacity:0.9;
+    display:none;
   }
   .brand{
     display:flex;
@@ -105,41 +98,39 @@
   .brand .name{ font-family:'Arcon', sans-serif; font-weight:400; font-size:18px; color:var(--ink); }
   .brand .role{ font-family:'Regencie', sans-serif; font-weight:300; font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:var(--gold); margin-top:2px;}
 
-  .tab-list{ display:flex; flex-direction:column; gap:6px; }
+  .tab-list{ display:flex; flex-direction:column; gap:1px; }
   .tab{
     position:relative;
-    background:var(--paper);
-    border:1px solid var(--rule);
-    border-right:none;
-    border-radius:8px 0 0 8px;
-    padding:12px 16px 12px 14px;
+    background:transparent;
+    border:none;
+    border-left:2px solid transparent;
+    border-radius:0;
+    padding:12px 18px 12px 16px;
     cursor:pointer;
     font-size:13.5px;
     color:var(--ink-soft);
-    transition:transform .15s ease, background .15s ease;
-    margin-right:-1px;
+    transition:background .15s ease, border-color .15s ease;
+    margin-right:0;
   }
   .tab .num{ font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink-soft); opacity:.6; display:block; margin-bottom:3px; letter-spacing:.05em;}
   .tab .names{ font-family:'Arcon',sans-serif; font-weight:600; font-size:15px; color:var(--ink); display:block;}
   .tab .date{ font-size:11px; color:var(--ink-soft); margin-top:2px; display:block;}
-  .tab:hover{ transform:translateX(-2px); }
+  .tab:hover{ background:var(--paper); }
   .tab.active{
-    background:var(--white-ish);
-    border-color:var(--ink);
-    transform:translateX(-6px);
-    box-shadow:-2px 2px 0 rgba(42,36,32,0.08);
+    background:transparent;
+    border-left:2px solid var(--gold);
   }
+  .tab.active .names{ color:var(--ink); }
   .tab-new{
     margin-top:10px;
     background:transparent;
     border:1px dashed var(--paper-darker);
-    border-right:none;
-    border-radius:8px 0 0 8px;
-    padding:11px 16px 11px 14px;
+    border-radius:4px;
+    padding:11px 16px 11px 16px;
     font-size:12.5px;
     color:var(--ink-soft);
     cursor:pointer;
-    margin-right:-1px;
+    margin-right:0;
   }
   .sidebar-foot{
     margin-top:auto;
@@ -178,6 +169,23 @@
     font-size:12.5px; color:var(--ink-soft); margin-top:5px;
   }
   .wedding-head .meta b{ color:var(--ink); font-weight:600; }
+  .wedding-head .meta-fields{ display:flex; gap:30px; flex-wrap:wrap; margin-top:12px; }
+  .wedding-head .meta-label{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); margin-bottom:4px; }
+  .wedding-head .meta-value{ font-size:13px; color:var(--ink); }
+  .wedding-head .meta-input{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    color:var(--ink);
+    border:none;
+    border-bottom:1px solid transparent;
+    background:transparent;
+    padding:1px 0 2px 0;
+    width:100%;
+  }
+  .wedding-head .meta-input:hover, .wedding-head .meta-input:focus{
+    border-bottom:1px solid var(--rule);
+    outline:none;
+  }
 
   .role-toggle{
     display:flex;
@@ -191,7 +199,7 @@
     padding:7px 10px;
     border:1px solid var(--ink);
     border-radius:6px;
-    background:var(--paper);
+    background:#FFFFFF;
     color:var(--ink);
     cursor:pointer;
   }
@@ -233,13 +241,13 @@
     margin-bottom:28px;
   }
   .card{
-    background:var(--paper);
+    background:#FFFFFF;
     border:1px solid var(--rule);
     border-radius:10px;
     padding:16px 18px;
   }
-  .card .label{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px;}
-  .card .value{ font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--ink);}
+  .card .label{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); margin-bottom:6px;}
+  .card .value{ font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:700; color:var(--ink);}
   .card.warn .value{ color:var(--wine); }
   .card.ok .value{ color:var(--sage); }
 
@@ -346,11 +354,11 @@
     padding:8px 10px;
     border:1px solid var(--ink);
     border-radius:6px;
-    background:var(--paper);
+    background:#FFFFFF;
   }
 
   .fornitore-card{
-    background:var(--paper);
+    background:#FFFFFF;
     border:1px solid var(--rule);
     border-radius:10px;
     padding:22px 24px;
@@ -359,9 +367,11 @@
   .fornitore-card h2{
     font-family:'Arcon',sans-serif;
     font-size:20px;
+    font-weight:600;
+    color:var(--ink);
     margin-bottom:4px;
   }
-  .fornitore-card .cat{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); margin-bottom:16px;}
+  .fornitore-card .cat{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--gold); margin-bottom:16px;}
   .fornitore-meta{ display:flex; gap:28px; margin-bottom:18px; flex-wrap:wrap;}
   .fornitore-meta div .k{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);}
   .fornitore-meta div .v{ font-size:13.5px; margin-top:2px;}
@@ -376,7 +386,7 @@
     font-family:'Inter',sans-serif;
     font-size:12.5px;
     font-weight:500;
-    background:var(--paper);
+    background:#FFFFFF;
     border:1px solid var(--rule);
     border-radius:20px;
     padding:7px 15px;
@@ -396,7 +406,7 @@
     border:1px solid var(--rule);
     border-radius:10px;
     overflow:hidden;
-    background:var(--paper);
+    background:#FFFFFF;
   }
   .swatch .chip{ height:70px; }
   .swatch .info{ padding:8px 10px; }
@@ -421,7 +431,7 @@
   /* stationery */
   .station-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:14px; margin-top:8px;}
   .station-card{
-    border:1px solid var(--rule); border-radius:10px; background:var(--paper); overflow:hidden;
+    border:1px solid var(--rule); border-radius:10px; background:#FFFFFF; overflow:hidden;
   }
   .station-card .thumb{
     height:120px; display:flex; align-items:center; justify-content:center;
@@ -532,18 +542,18 @@
     border-radius:10px;
     margin-bottom:16px;
     overflow:hidden;
-    background:var(--paper);
+    background:#FFFFFF;
   }
   .table-group-head{
     display:flex;
     align-items:baseline;
     justify-content:space-between;
     padding:12px 16px;
-    background:var(--paper-dark);
-    border-bottom:1px solid var(--rule);
+    background:#FFFFFF;
+    border-bottom:1px solid var(--ink);
   }
-  .table-group-head h4{ font-family:'Arcon',sans-serif; font-size:15px; font-weight:600; }
-  .table-group-head .tipo{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); }
+  .table-group-head h4{ font-family:'Arcon',sans-serif; font-size:15px; font-weight:700; color:var(--ink); }
+  .table-group-head .tipo{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); }
   .seat-num{
     font-family:'IBM Plex Mono',monospace;
     font-weight:700;
@@ -556,14 +566,14 @@
   }
   .criterio-note{ display:none; }
   .controls-box{
-    background:var(--paper); border:1px solid var(--rule); border-radius:8px;
+    background:#FFFFFF; border:1px solid var(--rule); border-radius:8px;
     padding:12px 14px; margin-bottom:18px;
   }
   .guest-form{
     display:grid;
     grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
     gap:10px;
-    background:var(--paper);
+    background:#FFFFFF;
     border:1px solid var(--rule);
     border-radius:10px;
     padding:16px;
@@ -592,7 +602,7 @@
   /* ============ EXPORT TOOLBAR ============ */
   .export-toolbar{
     display:flex; gap:8px; padding:10px 36px;
-    border-bottom:1px solid var(--rule); background:var(--paper);
+    border-bottom:1px solid var(--rule); background:#FFFFFF;
     flex-wrap:wrap; align-items:center;
   }
   .export-toolbar span{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-right:4px;}
@@ -607,13 +617,13 @@
   /* ============ DISPONIBILITÀ FORNITORI (calendario) ============ */
   .mf-list-item{
     cursor:pointer; padding:10px 12px; margin-bottom:6px; border-radius:8px;
-    border:1px solid var(--rule); background:var(--paper); position:relative;
+    border:1px solid var(--rule); background:#FFFFFF; position:relative;
   }
   .mf-list-item.active{ background:var(--ink); border-color:var(--ink); }
   .mf-list-item.active .mf-nome{ color:var(--white-ish); }
   .mf-list-item.active .mf-cat{ color:var(--white-ish); opacity:0.75; }
   .mf-nome{ font-family:'Arcon',sans-serif; font-weight:600; font-size:14px; color:var(--ink); display:block;}
-  .mf-cat{ font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em;}
+  .mf-cat{ font-size:10.5px; color:var(--gold); text-transform:uppercase; letter-spacing:.05em;}
   .mf-list-item .mf-del{ position:absolute; top:6px; right:8px; border:none; background:none; color:var(--wine); cursor:pointer; font-size:13px; }
   .mf-list-item.active .mf-del{ color:#ffb0b0; }
 
@@ -622,7 +632,7 @@
   .cal-nav-btn{
     font-family:'Inter',sans-serif; font-size:16px; font-weight:600;
     width:34px; height:34px; border-radius:50%; border:1px solid var(--rule);
-    background:var(--paper); color:var(--ink); cursor:pointer;
+    background:#FFFFFF; color:var(--ink); cursor:pointer;
   }
   .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
   .cal-dow{ text-align:center; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); padding-bottom:4px; }
@@ -637,7 +647,7 @@
   .cal-daycell.incognita{ background:rgba(238,181,73,0.2); border-color:var(--gold); }
   .mf-check-item{ display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:7px; cursor:pointer; }
   .mf-check-item:hover{ background:var(--paper); }
-  .mf-check-cat{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:10px 6px 2px 6px; }
+  .mf-check-cat{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); margin:10px 6px 2px 6px; }
   .cal-daycell.selected{ outline:2px solid var(--ink); outline-offset:-1px; }
   .cal-daynum{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink); font-weight:600; }
   .cal-luogo{ font-size:9px; color:var(--wine); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
@@ -1604,51 +1614,54 @@ function renderHomeScreen(){
         "Vivere a Passu Lentu è una filosofia,<br>non una moda."
       </div>
 
-      <div onclick="toggleHomeExpand('matrimoni')" style="cursor:pointer; background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:18px 24px; margin-bottom:14px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="font-family:'Arcon',sans-serif; font-weight:600; font-size:17px; color:var(--ink);">I tuoi matrimoni</div>
-          <div style="font-size:12px; color:var(--ink-soft); margin-top:2px;">${weddings.length} in gestione</div>
-        </div>
-        <span style="font-size:20px; color:var(--ink-soft);">${state.homeExpand==='matrimoni'?'−':'+'}</span>
-      </div>
-      ${state.homeExpand==='matrimoni' ? `
-        <div style="text-align:left; margin:-6px 0 20px 0; border:1px solid var(--rule); border-top:none; border-radius:0 0 12px 12px; overflow:hidden;">
-          ${weddings.map((w,i)=>`
-            <div onclick="enterWedding(${i})" style="cursor:pointer; padding:13px 22px; border-bottom:1px dashed var(--rule); background:var(--white-ish); display:flex; justify-content:space-between; align-items:center;">
-              <div><span style="font-family:'Arcon',sans-serif; font-weight:600; font-size:14.5px; color:var(--ink);">${w.names}</span>
-              <span style="font-size:12px; color:var(--ink-soft); margin-left:10px;">${w.date}</span></div>
-              <button onclick="event.stopPropagation(); deleteWedding('${w.id.replace(/'/g,"\\'")}')" style="border:none; background:none; color:var(--wine); cursor:pointer; font-size:14px;" title="Elimina">×</button>
-            </div>
-          `).join('')}
-          <div onclick="createNewWedding()" style="cursor:pointer; padding:13px 22px; background:var(--white-ish); color:var(--ink-soft); font-size:13px;">+ Nuovo matrimonio</div>
-        </div>
-      ` : ''}
+      <div style="width:100%; max-width:560px; margin:0 auto; text-align:left; background:var(--paper); border-radius:4px; padding:4px 28px;">
 
-      <div onclick="toggleHomeExpand('fornitori')" style="cursor:pointer; background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:18px 24px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="font-family:'Arcon',sans-serif; font-weight:600; font-size:17px; color:var(--ink);">Disponibilità Fornitori</div>
-          <div style="font-size:12px; color:var(--ink-soft); margin-top:2px;">${masterFornitori.length} fornitori censiti</div>
+        <div onclick="toggleHomeExpand('matrimoni')" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:20px 4px; border-top:1px solid var(--rule);">
+          <div>
+            <div style="font-family:'Arcon',sans-serif; font-size:16.5px; color:var(--ink);">I tuoi matrimoni</div>
+            <div style="font-size:12px; color:var(--ink-soft); margin-top:3px;">${weddings.length} in gestione</div>
+          </div>
+          <span style="font-size:13px; color:var(--ink-soft);">${state.homeExpand==='matrimoni'?'−':'→'}</span>
         </div>
-        <span style="font-size:20px; color:var(--ink-soft);">${state.homeExpand==='fornitori'?'−':'+'}</span>
+        ${state.homeExpand==='matrimoni' ? `
+          <div style="padding-bottom:6px;">
+            ${weddings.map((w,i)=>`
+              <div onclick="enterWedding(${i})" style="cursor:pointer; padding:12px 4px 12px 16px; border-top:1px solid var(--rule); display:flex; justify-content:space-between; align-items:center;">
+                <div><span style="font-family:'Arcon',sans-serif; font-size:14px; color:var(--ink);">${w.names}</span>
+                <span style="font-size:12px; color:var(--ink-soft); margin-left:10px;">${w.date}</span></div>
+                <button onclick="event.stopPropagation(); deleteWedding('${w.id.replace(/'/g,"\\'")}')" style="border:none; background:none; color:var(--wine); cursor:pointer; font-size:14px;" title="Elimina">×</button>
+              </div>
+            `).join('')}
+            <div onclick="createNewWedding()" style="cursor:pointer; padding:12px 4px 12px 16px; border-top:1px solid var(--rule); color:var(--ink-soft); font-size:12.5px;">+ Nuovo matrimonio</div>
+          </div>
+        ` : ''}
+
+        <div onclick="toggleHomeExpand('fornitori')" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:20px 4px; border-top:1px solid var(--rule); ${state.homeExpand==='fornitori'?'':'border-bottom:1px solid var(--rule);'}">
+          <div>
+            <div style="font-family:'Arcon',sans-serif; font-size:16.5px; color:var(--ink);">Disponibilità Fornitori</div>
+            <div style="font-size:12px; color:var(--ink-soft); margin-top:3px;">${masterFornitori.length} fornitori censiti</div>
+          </div>
+          <span style="font-size:13px; color:var(--ink-soft);">${state.homeExpand==='fornitori'?'−':'→'}</span>
+        </div>
+        ${state.homeExpand==='fornitori' ? renderFornitoriPreviewList() : ''}
       </div>
-      ${state.homeExpand==='fornitori' ? renderFornitoriPreviewList() : ''}
     </div>
   `;
 }
 
 function renderFornitoriPreviewList(){
   if(!masterFornitori.length){
-    return `<div style="text-align:left; margin:-6px 0 20px 0; border:1px solid var(--rule); border-top:none; border-radius:0 0 12px 12px; padding:16px 22px; color:var(--ink-soft); font-size:13px; background:var(--white-ish);">Nessun fornitore censito ancora.</div>`;
+    return `<div style="padding:14px 4px 20px 16px; border-top:1px solid var(--rule); color:var(--ink-soft); font-size:13px;">Nessun fornitore censito ancora.</div>`;
   }
   const groups = {};
   masterFornitori.forEach(f=>{ (groups[f.categoria] ||= []).push(f); });
   return `
-    <div style="text-align:left; margin:-6px 0 20px 0; border:1px solid var(--rule); border-top:none; border-radius:0 0 12px 12px; overflow:hidden; background:var(--white-ish);">
+    <div style="padding-bottom:16px;">
       ${Object.entries(groups).map(([cat,list])=>`
-        <div style="padding:10px 22px 4px 22px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); font-weight:600;">${cat}</div>
+        <div style="padding:14px 4px 4px 16px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); border-top:1px solid var(--rule);">${cat}</div>
         ${list.map(f=>`
-          <div onclick="enterFornitoreCalendar('${f.id.replace(/'/g,"\\'")}')" style="cursor:pointer; padding:9px 22px; border-bottom:1px dashed var(--rule);">
-            <span style="font-family:'Arcon',sans-serif; font-weight:600; font-size:14px; color:var(--ink);">${f.nome}</span>
+          <div onclick="enterFornitoreCalendar('${f.id.replace(/'/g,"\\'")}')" style="cursor:pointer; padding:8px 4px 8px 16px;">
+            <span style="font-family:'Arcon',sans-serif; font-size:14px; color:var(--ink);">${f.nome}</span>
           </div>
         `).join('')}
       `).join('')}
@@ -1750,19 +1763,21 @@ function renderHeader(){
     head.innerHTML = previewBanner + `
       <div class="eyebrow">Matrimonio</div>
       <input type="text" value="${w.names}" onchange="updateWeddingField('names',this.value)" style="font-family:'Arcon',sans-serif; font-weight:700; font-size:26px; color:var(--ink); border:1px solid transparent; border-radius:6px; padding:2px 4px; background:transparent; width:100%; max-width:420px;" onfocus="this.style.borderColor='var(--rule)'" onblur="this.style.borderColor='transparent'">
-      <div class="meta" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;">
-        <input type="text" value="${w.date}" onchange="updateWeddingField('date',this.value)" style="font-size:12.5px; font-weight:600; border:1px solid var(--rule); border-radius:5px; padding:3px 6px; width:130px;">
-        <span>·</span>
-        <input type="text" value="${w.location}" onchange="updateWeddingField('location',this.value)" style="font-size:12.5px; border:1px solid var(--rule); border-radius:5px; padding:3px 6px; width:180px;">
-        <span>· Chiesa:</span>
-        <input type="text" value="${w.chiesa}" onchange="updateWeddingField('chiesa',this.value)" style="font-size:12.5px; border:1px solid var(--rule); border-radius:5px; padding:3px 6px; width:220px;">
+      <div class="meta-fields">
+        <div><div class="meta-label">Data</div><input type="text" class="meta-input" value="${w.date}" onchange="updateWeddingField('date',this.value)" style="width:110px;"></div>
+        <div><div class="meta-label">Location</div><input type="text" class="meta-input" value="${w.location}" onchange="updateWeddingField('location',this.value)" style="width:190px;"></div>
+        <div><div class="meta-label">Chiesa</div><input type="text" class="meta-input" value="${w.chiesa}" onchange="updateWeddingField('chiesa',this.value)" style="width:220px;"></div>
       </div>
     `;
   } else {
     head.innerHTML = previewBanner + `
       <div class="eyebrow">Matrimonio</div>
       <h1>${w.names}</h1>
-      <div class="meta"><b>${w.date}</b> · ${w.location} · Chiesa: ${w.chiesa}</div>
+      <div class="meta-fields">
+        <div><div class="meta-label">Data</div><div class="meta-value">${w.date}</div></div>
+        <div><div class="meta-label">Location</div><div class="meta-value">${w.location}</div></div>
+        <div><div class="meta-label">Chiesa</div><div class="meta-value">${w.chiesa}</div></div>
+      </div>
     `;
   }
 }
@@ -2421,7 +2436,7 @@ function renderSchedeFornitori(w){
         <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); display:block; margin-bottom:6px;">Numeri di cellulare</label>
         <div style="display:flex; flex-wrap:wrap; gap:8px;">
           ${(f.telefoni||[]).map((tel,tIdx)=>`
-            <span style="display:inline-flex; align-items:center; gap:6px; background:var(--paper); border:1px solid var(--rule); border-radius:20px; padding:5px 6px 5px 12px; font-family:'IBM Plex Mono',monospace; font-size:12.5px;">
+            <span style="display:inline-flex; align-items:center; gap:6px; background:#FFFFFF; border:1px solid var(--rule); border-radius:20px; padding:5px 6px 5px 12px; font-family:'IBM Plex Mono',monospace; font-size:12.5px;">
               ${tel}
               <button onclick="removeFornitoreTelefono('${f.ref.replace(/'/g,"\\'")}',${tIdx})" style="border:none;background:none;color:var(--wine);cursor:pointer;font-size:13px; line-height:1;">×</button>
             </span>
