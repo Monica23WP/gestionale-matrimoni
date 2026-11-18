@@ -1081,6 +1081,7 @@ function normalizeWedding(w){
     if(!g.pernottamento) g.pernottamento = {struttura:'', checkin:'', checkout:'', note:''};
   });
   if(!w.indirizzi) w.indirizzi = {casaSposa:'', casaSposo:'', chiesa:'', location:'', tempoSposaChiesa:'', tempoSposoChiesa:'', tempoChiesaLocation:''};
+  if(!w.cerimoniaDati) w.cerimoniaDati = {genitoriSposa:'', genitoriSposo:'', testimoniSposa:'', testimoniSposo:''};
   if(!w.moodboard) w.moodboard = { palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} };
   if(!w.moodboard.floorplan) w.moodboard.floorplan = {zones:[], stations:[], tables:0, staffTable:''};
   const fp = w.moodboard.floorplan;
@@ -2375,6 +2376,7 @@ function renderTimelineByRole(w){
   return `
     ${renderTimelinePlanToggle()}
     ${renderIndirizziBlock(w, true)}
+    ${renderCerimoniaDatiBlock(w, true)}
     ${nav}
     <div class="fornitore-card">
       <h2>${role.label}${state.timelinePlanB ? ' <span style="font-size:11px; font-weight:700; color:var(--wine); text-transform:uppercase; letter-spacing:.05em;">· Piano B pioggia</span>' : ''}</h2>
@@ -3735,7 +3737,7 @@ function renderAll(){
 }
 
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
-const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','fornitoriEmails','guests','moodboard','tasks','tasksPlanB','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles','indirizzi'];
+const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','fornitoriEmails','guests','moodboard','tasks','tasksPlanB','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles','indirizzi','cerimoniaDati'];
 
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
@@ -4822,6 +4824,48 @@ function updateIndirizzo(field, value){
   renderContent();
 }
 
+function renderCerimoniaDatiBlock(w, editable){
+  const cd = w.cerimoniaDati || {genitoriSposa:'', genitoriSposo:'', testimoniSposa:'', testimoniSposo:''};
+  const fields = [
+    {key:'genitoriSposa', label:'Genitori della Sposa'},
+    {key:'genitoriSposo', label:'Genitori dello Sposo'},
+    {key:'testimoniSposa', label:'Testimoni della Sposa'},
+    {key:'testimoniSposo', label:'Testimoni dello Sposo'}
+  ];
+  if(editable){
+    return `
+      <div class="controls-box" style="margin-top:14px; margin-bottom:18px;">
+        <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); display:block; margin-bottom:8px;">Dati cerimonia — genitori e testimoni</label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;">
+          ${fields.map(f=>`
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:10.5px; color:var(--ink-soft);">${f.label}</span>
+              <input type="text" value="${cd[f.key]||''}" placeholder="nomi" onchange="updateCerimoniaDato('${f.key}',this.value)" style="padding:6px 8px; border:1px solid var(--rule); border-radius:6px; min-width:200px; font-size:12.5px;">
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  const valorizzati = fields.filter(f=>cd[f.key]);
+  if(!valorizzati.length) return '';
+  return `
+    <div class="controls-box" style="margin-top:14px; margin-bottom:18px;">
+      <label style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); display:block; margin-bottom:8px;">Dati cerimonia — genitori e testimoni</label>
+      <ul style="margin:0; padding-left:18px; font-size:12.5px; line-height:1.7;">
+        ${valorizzati.map(f=>`<li><span style="color:var(--ink-soft);">${f.label}:</span> ${cd[f.key]}</li>`).join('')}
+      </ul>
+    </div>
+  `;
+}
+function updateCerimoniaDato(field, value){
+  const w = currentWedding();
+  if(!w.cerimoniaDati) w.cerimoniaDati = {};
+  w.cerimoniaDati[field] = value;
+  persistWedding(w);
+  renderContent();
+}
+
 function encodeGroupItems(items){
   return items.map(it=>`${it.ref}:::${it.idx}`).join('|||');
 }
@@ -4904,8 +4948,8 @@ function renderTimelineGenerale(w){
       <button onclick="addTimelineRowGenerale()">+ Aggiungi voce</button>
     </div>
   `;
-  if(!gruppi.length) return renderTimelinePlanToggle() + renderIndirizziBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura${state.timelinePlanB ? ' nel Piano B' : ''}.</div>` + formAggiunta;
-  return renderTimelinePlanToggle() + renderIndirizziBlock(w, true) + `
+  if(!gruppi.length) return renderTimelinePlanToggle() + renderIndirizziBlock(w, true) + renderCerimoniaDatiBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura${state.timelinePlanB ? ' nel Piano B' : ''}.</div>` + formAggiunta;
+  return renderTimelinePlanToggle() + renderIndirizziBlock(w, true) + renderCerimoniaDatiBlock(w, true) + `
     <table class="tg-table">
       <thead><tr><th style="width:36px"></th><th>Orario</th><th>Attività</th><th>Note</th><th>Categorie</th><th></th></tr></thead>
       <tbody>
