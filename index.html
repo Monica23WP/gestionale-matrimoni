@@ -132,6 +132,23 @@
     cursor:pointer;
     margin-right:0;
   }
+  .menu-group-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 18px 12px 16px;
+    font-family:'Arcon',sans-serif;
+    font-size:14px;
+    color:var(--ink-soft);
+    cursor:pointer;
+    border-left:2px solid transparent;
+    transition:background .15s ease;
+  }
+  .menu-group-head:hover{ background:var(--paper); }
+  .menu-group-head.has-active{ color:var(--ink); font-weight:600; border-left:2px solid var(--gold); }
+  .menu-group-head .chev{ font-size:11px; color:var(--ink-soft); transition:transform .15s ease; display:inline-block; }
+  .menu-sub{ display:flex; flex-direction:column; gap:1px; }
+  .menu-sub .tab{ padding-left:30px; }
   .sidebar-foot{
     margin-top:auto;
     padding:16px 18px 0 6px;
@@ -1034,6 +1051,7 @@ function normalizeWedding(w){
     if(!g.transferAH) g.transferAH = {data:'', ora:''};
     if(!g.transferHC) g.transferHC = {data:'', ora:''};
     if(!g.transferCR) g.transferCR = {data:'', ora:''};
+    if(!g.pernottamento) g.pernottamento = {struttura:'', checkin:'', checkout:'', note:''};
   });
   if(!w.moodboard) w.moodboard = { palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} };
   if(!w.moodboard.floorplan) w.moodboard.floorplan = {zones:[], stations:[], tables:0, staffTable:''};
@@ -1239,7 +1257,21 @@ function sendReminderEmail(catNome, sgNome, idx, sIdx, tipo){
   window.open(mailto, '_blank');
 }
 
-const PLANNER_SECTIONS = [['budget','Budget'],['fornitori','Fornitori'],['schede','Schede Fornitori'],['timeline','Timeline'],['timelinegenerale','Timeline Generale'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
+const PLANNER_SECTIONS = [['budget','Budget'],['fornitori','Fornitori'],['schede','Schede Fornitori'],['timeline','Timeline'],['timelinegenerale','Timeline Generale'],['pagamenti','Pagamenti'],['ospiti','Lista Invitati'],['transfer','Lista Transfer'],['pernottamenti','Lista Pernottamenti'],['moodboard','Grafica & Moodboard'],['accessi','Registro Accessi']];
+const PLANNER_MENU = [
+  {group:'Fornitori', items:[['fornitori','Fornitori'],['schede','Schede Fornitori'],['timeline','Timeline']]},
+  {id:'timelinegenerale', label:'Timeline Generale'},
+  {group:'Money', items:[['budget','Budget'],['pagamenti','Pagamenti']]},
+  {group:'Gestione', items:[['ospiti','Lista Invitati'],['transfer','Lista Transfer'],['pernottamenti','Lista Pernottamenti']]},
+  {group:'Design', items:[['moodboard','Grafica & Moodboard']]},
+  {id:'accessi', label:'Registro Accessi'}
+];
+function toggleMenuGroup(name){
+  if(!state.menuOpenGroups) state.menuOpenGroups = new Set();
+  if(state.menuOpenGroups.has(name)) state.menuOpenGroups.delete(name);
+  else state.menuOpenGroups.add(name);
+  renderSidebar();
+}
 
 function sectionsForRole(role, w){
   if(role==='planner') return PLANNER_SECTIONS;
@@ -1251,6 +1283,31 @@ function sectionsForRole(role, w){
   return [['fornitore','La mia scheda']]; // la vista fornitore non ha sotto-sezioni
 }
 function renderSectionMenuHtml(role, w){
+  if(role==='planner'){
+    if(!state.menuOpenGroups) state.menuOpenGroups = new Set();
+    return PLANNER_MENU.map(entry=>{
+      if(entry.group){
+        const hasActive = entry.items.some(([id])=>id===state.subtab);
+        const isOpen = hasActive || state.menuOpenGroups.has(entry.group);
+        return `
+          <div class="menu-group-head ${hasActive?'has-active':''}" onclick="toggleMenuGroup('${entry.group}')">
+            <span>${entry.group}</span>
+            <span class="chev" style="transform:rotate(${isOpen?90:0}deg);">›</span>
+          </div>
+          ${isOpen ? `<div class="menu-sub">${entry.items.map(([id,label])=>`
+            <div class="tab ${state.subtab===id?'active':''}" onclick="event.stopPropagation(); setSubtab('${id}')">
+              <span class="names" style="font-size:13px;">${label}</span>
+            </div>
+          `).join('')}</div>` : ''}
+        `;
+      }
+      return `
+        <div class="tab ${state.subtab===entry.id?'active':''}" onclick="setSubtab('${entry.id}')">
+          <span class="names" style="font-size:13.5px;">${entry.label}</span>
+        </div>
+      `;
+    }).join('');
+  }
   return sectionsForRole(role, w).map(([id,label])=>{
     const isFornitore = role==='fornitore';
     const active = isFornitore || state.subtab===id;
@@ -1793,7 +1850,7 @@ function renderSubnav(){
   document.getElementById('subnav').innerHTML = '';
 }
 
-function setSubtab(id){ state.subtab = id; renderContent(); renderSubnav(); }
+function setSubtab(id){ state.subtab = id; renderContent(); renderSubnav(); renderSidebar(); }
 
 function renderContent(){
   const c = document.getElementById('content');
@@ -2009,6 +2066,18 @@ function renderContent(){
 
   if(state.subtab==='ospiti'){
     c.innerHTML = renderGuestList(w);
+    persistWedding(w);
+    return;
+  }
+
+  if(state.subtab==='transfer'){
+    c.innerHTML = renderTransferList(w);
+    persistWedding(w);
+    return;
+  }
+
+  if(state.subtab==='pernottamenti'){
+    c.innerHTML = renderPernottamentiList(w);
     persistWedding(w);
     return;
   }
@@ -2800,6 +2869,80 @@ function updateGuestField(idx, field, value){
 function updateGuestTransfer(idx, field, part, value){
   currentWedding().guests[idx][field][part] = value;
   persistWedding(currentWedding());
+}
+function updateGuestPernottamento(idx, part, value){
+  currentWedding().guests[idx].pernottamento[part] = value;
+  persistWedding(currentWedding());
+}
+
+function renderTransferList(w){
+  return `<div class="empty-state">Sezione in preparazione — torneremo a costruirla più avanti.</div>`;
+}
+function renderTransferListFull(w){
+  const guests = w.guests || [];
+  if(!guests.length) return `<div class="empty-state">Nessun invitato ancora inserito in Lista Invitati.</div>`;
+  const sorted = guests.map((g,i)=>({g,idx:i})).sort((a,b)=>a.g.cognome.localeCompare(b.g.cognome) || a.g.nome.localeCompare(b.g.nome));
+  return `
+    <div class="criterio-note" style="display:block; margin-bottom:14px;">Questi orari sono gli stessi che trovi anche in Lista Invitati — modificarli qui li aggiorna anche lì, e viceversa.</div>
+    <div style="overflow-x:auto;">
+    <table style="min-width:900px;">
+      <thead><tr>
+        <th>Cognome</th><th>Nome</th><th>Transfer Aeroporto → Hotel</th><th>Transfer Hotel → Cerimonia</th><th>Transfer Cerimonia → Ricevimento</th>
+      </tr></thead>
+      <tbody>
+        ${sorted.map(({g,idx})=>`
+          <tr>
+            <td style="font-weight:600;">${g.cognome}</td>
+            <td>${g.nome}</td>
+            <td>${transferCell(idx,'transferAH',g.transferAH)}</td>
+            <td>${transferCell(idx,'transferHC',g.transferHC)}</td>
+            <td>${transferCell(idx,'transferCR',g.transferCR)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+
+function pernottamentoCell(idx, p){
+  p = p || {struttura:'', checkin:'', checkout:'', note:''};
+  return `
+    <div style="display:flex; gap:4px; flex-wrap:wrap;">
+      <input type="text" placeholder="Struttura" value="${p.struttura||''}" onchange="updateGuestPernottamento(${idx},'struttura',this.value)" style="font-size:11px; padding:3px 5px; border:1px solid var(--rule); border-radius:4px; width:120px;">
+      <input type="date" value="${p.checkin||''}" onchange="updateGuestPernottamento(${idx},'checkin',this.value)" style="font-size:11px; padding:3px; border:1px solid var(--rule); border-radius:4px;">
+      <input type="date" value="${p.checkout||''}" onchange="updateGuestPernottamento(${idx},'checkout',this.value)" style="font-size:11px; padding:3px; border:1px solid var(--rule); border-radius:4px;">
+    </div>
+  `;
+}
+
+function renderPernottamentiList(w){
+  return `<div class="empty-state">Sezione in preparazione — torneremo a costruirla più avanti.</div>`;
+}
+function renderPernottamentiListFull(w){
+  const guests = w.guests || [];
+  if(!guests.length) return `<div class="empty-state">Nessun invitato ancora inserito in Lista Invitati.</div>`;
+  const sorted = guests.map((g,i)=>({g,idx:i})).sort((a,b)=>a.g.cognome.localeCompare(b.g.cognome) || a.g.nome.localeCompare(b.g.nome));
+  return `
+    <div class="criterio-note" style="display:block; margin-bottom:14px;">Struttura, check-in e check-out per gli invitati che pernottano. Lascia vuoto chi non pernotta.</div>
+    <div style="overflow-x:auto;">
+    <table style="min-width:760px;">
+      <thead><tr>
+        <th>Cognome</th><th>Nome</th><th>Pernottamento</th><th>Note</th>
+      </tr></thead>
+      <tbody>
+        ${sorted.map(({g,idx})=>`
+          <tr>
+            <td style="font-weight:600;">${g.cognome}</td>
+            <td>${g.nome}</td>
+            <td>${pernottamentoCell(idx,g.pernottamento)}</td>
+            <td><input type="text" placeholder="—" value="${(g.pernottamento&&g.pernottamento.note)||''}" onchange="updateGuestPernottamento(${idx},'note',this.value)" style="font-size:12px; padding:4px 6px; border:1px solid var(--rule); border-radius:5px; width:140px;"></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
 }
 function saveRsvpChannel(){
   const w = currentWedding();
