@@ -1080,6 +1080,7 @@ function normalizeWedding(w){
     if(!g.transferCR) g.transferCR = {data:'', ora:''};
     if(!g.pernottamento) g.pernottamento = {struttura:'', checkin:'', checkout:'', note:''};
   });
+  if(!w.indirizzi) w.indirizzi = {casaSposa:'', casaSposo:'', chiesa:'', location:'', tempoSposaChiesa:'', tempoSposoChiesa:'', tempoChiesaLocation:''};
   if(!w.moodboard) w.moodboard = { palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} };
   if(!w.moodboard.floorplan) w.moodboard.floorplan = {zones:[], stations:[], tables:0, staffTable:''};
   const fp = w.moodboard.floorplan;
@@ -2373,6 +2374,7 @@ function renderTimelineByRole(w){
 
   return `
     ${renderTimelinePlanToggle()}
+    ${renderIndirizziBlock(w, true)}
     ${nav}
     <div class="fornitore-card">
       <h2>${role.label}${state.timelinePlanB ? ' <span style="font-size:11px; font-weight:700; color:var(--wine); text-transform:uppercase; letter-spacing:.05em;">· Piano B pioggia</span>' : ''}</h2>
@@ -3733,7 +3735,7 @@ function renderAll(){
 }
 
 // ============ PERSISTENZA: Firebase (produzione) oppure window.storage (anteprima qui in chat) ============
-const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','fornitoriEmails','guests','moodboard','tasks','tasksPlanB','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles'];
+const PERSIST_FIELDS = ['names','date','location','chiesa','budgetTotale','budgetStimato','imprevisti','categorie','fornitori','fornitoriEmails','guests','moodboard','tasks','tasksPlanB','rsvpChannel','sposiEmail','sposiCanSeeDesign','sposiFornitoriVisibili','emergencyContacts','timelineRoles','indirizzi'];
 
 // STEP OBBLIGATORIO PER LA PUBBLICAZIONE: sostituisci questi valori con quelli
 // del TUO progetto Firebase (Console Firebase → Impostazioni progetto → Le tue app → Config).
@@ -4828,8 +4830,8 @@ function renderTimelineGenerale(w){
       <button onclick="addTimelineRowGenerale()">+ Aggiungi voce</button>
     </div>
   `;
-  if(!gruppi.length) return renderTimelinePlanToggle() + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura${state.timelinePlanB ? ' nel Piano B' : ''}.</div>` + formAggiunta;
-  return renderTimelinePlanToggle() + `
+  if(!gruppi.length) return renderTimelinePlanToggle() + renderIndirizziBlock(w, true) + `<div class="empty-state">Nessuna voce di timeline inserita ancora per nessuna figura${state.timelinePlanB ? ' nel Piano B' : ''}.</div>` + formAggiunta;
+  return renderTimelinePlanToggle() + renderIndirizziBlock(w, true) + `
     <table class="tg-table">
       <thead><tr><th style="width:36px"></th><th>Orario</th><th>Attività</th><th>Note</th><th>Categorie</th><th></th></tr></thead>
       <tbody>
