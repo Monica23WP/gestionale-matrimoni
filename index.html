@@ -667,6 +667,7 @@
   .mf-check-cat{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); margin:10px 6px 2px 6px; }
   .cal-daycell.selected{ outline:2px solid var(--ink); outline-offset:-1px; }
   .cal-daynum{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink); font-weight:600; }
+  .cal-dow-mobile{ display:none; }
   .cal-luogo{ font-size:9px; color:var(--wine); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
   .cal-inline-select{
     width:100%; margin-top:4px; font-size:9.5px; font-weight:600; padding:2px 1px;
@@ -744,6 +745,25 @@
     .wedding-head .meta-fields{ gap:16px; }
     .wedding-head .meta-fields > div{ flex:1 1 110px; max-width:170px; }
     *{ max-width:100%; }
+
+    /* Calendario disponibilità fornitori: su mobile una colonna di righe (una per giorno) invece
+       della griglia a 7 colonne, troppo stretta per leggere ed usare comodamente da telefono. */
+    .cal-grid{ grid-template-columns:1fr; gap:6px; }
+    .cal-dow{ display:none; }
+    .cal-daycell.empty{ display:none; }
+    .cal-daycell{
+      display:flex; align-items:center; gap:10px; min-height:0; padding:10px 12px;
+    }
+    .cal-dow-mobile{
+      display:inline-block; flex-shrink:0; width:34px; font-size:11px; letter-spacing:.04em;
+      text-transform:uppercase; color:var(--ink-soft);
+    }
+    .cal-daynum{ flex-shrink:0; font-size:15px; min-width:22px; }
+    .cal-luogo{
+      margin:0 0 0 auto; white-space:normal; text-align:right; max-width:55%;
+      overflow:visible; text-overflow:unset;
+    }
+    .cal-inline-select{ width:auto; margin:0 0 0 auto; font-size:12px; padding:6px 8px; }
   }
 </style>
 </head>
@@ -1530,6 +1550,8 @@ function jumpVetrinaYear(v){
   renderContent();
 }
 
+const DOW_ABBR = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+function dowAbbr(y,m,d){ return DOW_ABBR[(new Date(y,m-1,d).getDay()+6)%7]; }
 function summarizeAvailability(calendario, y, m){
   const giorniNelMese = new Date(y, m, 0).getDate();
   const liberi = [], occupati = [], inAttesa = [];
@@ -1565,6 +1587,7 @@ function renderReadOnlyMiniCalendar(calendario, y, m){
     const stato = voce ? voce.stato : 'libero';
     celle += `
       <div class="cal-daycell ${stato}" style="cursor:default; min-height:44px;">
+        <span class="cal-dow-mobile">${dowAbbr(y,m,d)}</span>
         <span class="cal-daynum">${d}</span>
       </div>
     `;
@@ -1602,6 +1625,7 @@ function renderFornitoreProfiloView(){
     const selected = dateStr===state.calendarSelectedDay;
     celle += `
       <div class="cal-daycell ${stato} ${selected?'selected':''}" onclick="selectCalendarDay('${dateStr}')">
+        <span class="cal-dow-mobile">${dowAbbr(y,m,d)}</span>
         <span class="cal-daynum">${d}</span>
         ${selected ? `
           <select class="cal-inline-select" onclick="event.stopPropagation()" onchange="setGiornoStato('${dateStr}', this.value)">
@@ -4350,6 +4374,7 @@ function renderDisponibilitaScreen(){
     const selected = dateStr===state.calendarSelectedDay;
     celle += `
       <div class="cal-daycell ${stato} ${selected?'selected':''}" onclick="selectCalendarDay('${dateStr}')">
+        <span class="cal-dow-mobile">${dowAbbr(y,m,d)}</span>
         <span class="cal-daynum">${d}</span>
         ${selected ? `
           <select class="cal-inline-select" onclick="event.stopPropagation()" onchange="setGiornoStato('${dateStr}', this.value)">
@@ -4533,6 +4558,7 @@ function renderComparazioniView(){
     const nomiOccupati = stato==='occupato' ? occupatiGiorno(dateStr) : [];
     celle += `
       <div class="cal-daycell ${stato} ${selected?'selected':''}" onclick="selectComparazioneDay('${dateStr}')">
+        <span class="cal-dow-mobile">${dowAbbr(y,m,d)}</span>
         <span class="cal-daynum">${d}</span>
         ${nomiOccupati.length ? `<span class="cal-luogo">${nomiOccupati.join(', ')}</span>` : ''}
       </div>
