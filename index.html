@@ -1059,32 +1059,6 @@ function guessTimelineRoleId(w, cat){
   const auto = (w.timelineRoles||[]).find(r=> r.id===slugCat || slugRuolo(r.label)===slugCat);
   return auto ? auto.id : null;
 }
-function genLinkId(){ return 'lk'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
-// Collega automaticamente, la prima volta che il matrimonio viene caricato dopo questo aggiornamento,
-// le voci di timeline già presenti identiche (stesso orario + stessa attività) su più figure/fornitori,
-// così le modifiche successive restano sincronizzate anche se i valori poi divergono.
-function autoLinkMatchingTimelineRows(w){
-  [w.tasks, w.tasksPlanB].forEach(store=>{
-    if(!store) return;
-    const gruppi = {};
-    Object.keys(store).forEach(roleId=>{
-      (store[roleId]||[]).forEach(t=>{
-        if(t.linkId) return;
-        const d = (t.d||'').trim().toLowerCase();
-        if(!d) return;
-        const chiave = (t.t||'').trim().toLowerCase() + '||' + d;
-        (gruppi[chiave] ||= []).push({roleId, t});
-      });
-    });
-    Object.values(gruppi).forEach(items=>{
-      const ruoliCoinvolti = new Set(items.map(it=>it.roleId));
-      if(items.length>1 && ruoliCoinvolti.size>1){
-        const linkId = genLinkId();
-        items.forEach(it=> it.t.linkId = linkId);
-      }
-    });
-  });
-}
 function normalizeWedding(w){
   if(!w.rsvpChannel) w.rsvpChannel = {tipo:'', valore:''};
   if(w.sposiEmail===undefined) w.sposiEmail = '';
@@ -1116,7 +1090,6 @@ function normalizeWedding(w){
   });
   if(!w.indirizzi) w.indirizzi = {casaSposa:'', casaSposo:'', chiesa:'', location:'', tempoSposaChiesa:'', tempoSposoChiesa:'', tempoChiesaLocation:''};
   if(!w.cerimoniaDati) w.cerimoniaDati = {genitoriSposa:'', genitoriSposo:'', testimoniSposa:'', testimoniSposo:''};
-  autoLinkMatchingTimelineRows(w);
   if(!w.moodboard) w.moodboard = { palette:[], stationery:[], floorplan:{zones:[], stations:[], tables:0, staffTable:''} };
   if(!w.moodboard.floorplan) w.moodboard.floorplan = {zones:[], stations:[], tables:0, staffTable:''};
   const fp = w.moodboard.floorplan;
@@ -2489,11 +2462,6 @@ function copySelectedTimelineRows(sourceRoleId){
   const store = tasksStore(w);
   const source = store[sourceRoleId] || [];
   const daCopiare = [...state.timelineRowsSelected].sort((a,b)=>a-b).map(i=>source[i]).filter(Boolean);
-  // collega la voce sorgente alle copie che sta per creare, così le modifiche successive (anche solo
-  // all'orario o alla mansione) restano sincronizzate su tutte le figure
-  if(targets.length){
-    daCopiare.forEach(t=>{ if(!t.linkId) t.linkId = genLinkId(); });
-  }
   // Piano B per la figura corrente (indipendente dalla scelta di copiare o no su altre figure)
   if(alsoB && !state.timelinePlanB){
     if(!w.tasksPlanB[sourceRoleId]) w.tasksPlanB[sourceRoleId] = [];
@@ -2502,7 +2470,7 @@ function copySelectedTimelineRows(sourceRoleId){
   }
   targets.forEach(roleId=>{
     if(!store[roleId]) store[roleId] = [];
-    daCopiare.forEach(t=> store[roleId].push({t: t.t, d: t.d, note: t.note||'', linkId: t.linkId}));
+    daCopiare.forEach(t=> store[roleId].push({t: t.t, d: t.d, note: t.note||''}));
     store[roleId].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
     if(alsoB && !state.timelinePlanB){
       if(!w.tasksPlanB[roleId]) w.tasksPlanB[roleId] = [];
@@ -2550,10 +2518,9 @@ function addTimelineRowRole(roleId){
   const store = tasksStore(w);
   const alsoB = alsoPlanBChecked();
   const destinatari = [roleId, ...getTimelineRoleCopyTargets()];
-  const linkId = destinatari.length>1 ? genLinkId() : null;
   destinatari.forEach(r=>{
     if(!store[r]) store[r] = [];
-    store[r].push({t: t || '—', d, note, linkId});
+    store[r].push({t: t || '—', d, note});
     store[r].sort((a,b)=>timeSortKey(a.t)-timeSortKey(b.t));
     if(alsoB && !state.timelinePlanB){
       if(!w.tasksPlanB[r]) w.tasksPlanB[r] = [];
@@ -2769,24 +2736,18 @@ function updateTimelineRow(ref, idx, field, value){
   const w = currentWedding();
   const store = tasksStore(w);
   const row = store[ref][idx];
-  // individua le voci "gemelle" su altre figure PRIMA della modifica, sia per collegamento esplicito
-  // (linkId, creato da "copia su altre figure") sia, come rete di sicurezza, per coincidenza di testo
-  // (stesso orario + stessa mansione): la modifica va applicata anche a loro
-  const chiave = (row.t||'').trim().toLowerCase() + '||' + (row.d||'').trim().toLowerCase();
+  // individua, al momento del salvataggio, le voci con la stessa identica attività (stesso testo della
+  // mansione) presenti nelle timeline di altre figure/fornitori, a prescindere dall'orario — e applica
+  // a tutte loro lo stesso cambiamento appena fatto
+  const vecchioTesto = (row.d||'').trim().toLowerCase();
   const gemelle = [];
-  Object.keys(store).forEach(roleId=>{
-    (store[roleId]||[]).forEach(t=>{
-      if(t===row) return;
-      const stessoLink = row.linkId && t.linkId===row.linkId;
-      const stessoTesto = ((t.t||'').trim().toLowerCase() + '||' + (t.d||'').trim().toLowerCase()) === chiave;
-      if(stessoLink || stessoTesto) gemelle.push(t);
+  if(vecchioTesto){
+    Object.keys(store).forEach(roleId=>{
+      (store[roleId]||[]).forEach(t=>{
+        if(t===row) return;
+        if((t.d||'').trim().toLowerCase()===vecchioTesto) gemelle.push(t);
+      });
     });
-  });
-  if(!row.linkId && gemelle.length){
-    // prima volta che risultano collegate: assegna un linkId condiviso così restano sincronizzate anche in futuro
-    const linkId = genLinkId();
-    row.linkId = linkId;
-    gemelle.forEach(t=> t.linkId = linkId);
   }
   row[field] = value;
   gemelle.forEach(t=> t[field] = value);
